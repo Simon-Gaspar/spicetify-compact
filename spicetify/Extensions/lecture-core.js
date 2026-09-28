@@ -5,7 +5,8 @@
     setTimeout(lectureCore, 300);
     return;
   }
-  const icon = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4"/></svg>';
+  // width/height explicites : sans eux, le SVG fait 0 × 0 dans la barre du lecteur.
+  const icon = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4"/></svg>';
   const toggle = () => {
     const H = Spicetify.Platform.History;
     if (H.location.pathname === "/lecture") H.goBack();

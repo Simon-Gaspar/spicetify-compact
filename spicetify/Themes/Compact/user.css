@@ -65,13 +65,18 @@ body.acc-mac .main-globalNav-historyButtonsWrapper {
   padding-left: calc(2600px / var(--zoom-level, 100)) !important;
 }
 
-/* Maison native en double avec le bouton « Accueil » de la custom app (même destination). */
+/* Maison native en double avec le bouton « Accueil » de la custom app (même destination).
+   Repérée par sa place (à gauche de la recherche) : l'aria-label est traduit (« Accueil » en
+   français, comme la custom app). */
+body.acc-app #global-nav-bar .main-globalNav-searchContainer > button:first-child,
 body.acc-app #global-nav-bar button[aria-label="Home"] {
   display: none !important;
 }
 
 /* Plein écran : la vue « lecture » (custom app) remplace le plein écran natif ;
    son entrée de navigation en haut est inutile (ouverture depuis la barre du lecteur). */
+/* data-testid plutôt que l'aria-label, traduit selon la langue de Spotify. */
+body.acc-lecture .Root__now-playing-bar button[data-testid="fullscreen-mode-button"],
 body.acc-lecture .Root__now-playing-bar button[aria-label="Enter Full screen"],
 #global-nav-bar button[aria-label="Lecture"] {
   display: none !important;
