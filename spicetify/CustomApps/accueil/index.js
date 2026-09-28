@@ -709,10 +709,10 @@ const CSS = `
 .acc-sub { color: var(--acc-sub); font-size: .8125rem; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .acc-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 40px clamp(32px, 4vw, 72px); align-items: start; }
 .acc-col { min-width: 0; }
-.acc-col-head { display: flex; align-items: baseline; gap: 8px; padding: 0 8px 10px; margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.acc-col-head { display: flex; align-items: baseline; gap: 8px; padding: 0 2px 10px; margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,.08); }
 .acc-col-head h2 { font-size: 1.125rem; font-weight: 700; margin: 0; }
 .acc-count { color: var(--acc-sub); font-size: .8125rem; }
-.acc-col-more { margin: 10px 8px 0; }
+.acc-col-more { margin: 10px 2px 0; }
 .acc-heroes { display: flex; gap: 12px; flex-wrap: wrap; }
 .acc-liked-art.is-season { background: linear-gradient(135deg, #b3541e, #f2c14e); overflow: hidden; }
 .acc-liked-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -723,6 +723,9 @@ button.acc-schip { padding: 5px 12px; }
 .acc-schip:hover { background: var(--acc-chip-hover); }
 .acc-schip.is-on { background: var(--acc-text); color: #000; }
 .acc-schip-label { background: none; border: 0; color: inherit; font: inherit; padding: 5px 12px 5px 6px; cursor: pointer; }
+.acc-schip-label:first-child { padding-left: 12px; }
+.acc-chip-n { margin-left: 6px; color: var(--acc-sub); font-variant-numeric: tabular-nums; }
+.acc-schip.is-on .acc-chip-n { color: rgba(0,0,0,.55); }
 .acc-schip-play { width: 22px; height: 22px; margin-left: 3px; border: 0; border-radius: 50%; display: grid; place-items: center; background: transparent; color: var(--acc-sub); cursor: pointer; font-size: .7rem; }
 .acc-schip-play svg { width: 11px; height: 11px; }
 .acc-schip:hover .acc-schip-play, .acc-schip-play:focus-visible { background: var(--acc-green); color: #000; }
