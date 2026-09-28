@@ -152,12 +152,14 @@ function LectureApp() {
     };
   }, []);
 
-  if (!now.item) return h("div", { className: "lec" }, h("style", null, CSS), h("div", { className: "lec-queue-empty" }, "Rien en cours de lecture."));
+  const closeButton = h("button", { className: "lec-close", title: "Fermer (Échap)", onClick: close }, I.close());
+
+  if (!now.item) return h("div", { className: "lec" }, h("style", null, CSS), closeButton, h("div", { className: "lec-queue-empty" }, "Rien en cours de lecture."));
 
   return h("div", { className: "lec" },
     h("style", null, CSS),
     now.img && h("div", { className: "lec-bg", style: { backgroundImage: `url("${now.img}")` } }),
-    h("button", { className: "lec-close", title: "Fermer (Échap)", onClick: close }, I.close()),
+    closeButton,
     h("main", { className: "lec-now" },
       h("div", { className: "lec-cover" }, now.img && h("img", { src: now.img, alt: "" })),
       h("div", { className: "lec-meta" },
@@ -185,7 +187,9 @@ body.lec-open *:has(.lec) { transform: none !important; will-change: auto !impor
   padding: clamp(28px, 5vh, 72px) clamp(24px, 5vw, 96px); }
 @media (max-width: 1000px) { .lec { grid-template-columns: minmax(0, 1fr); overflow-y: auto; } }
 .lec-bg { position: absolute; inset: -12%; z-index: -1; background-size: cover; background-position: center; filter: blur(70px) brightness(.42) saturate(1.3); transform: scale(1.1); transition: background-image .6s; }
-.lec-close { position: absolute; top: 20px; right: 24px; width: 40px; height: 40px; border: 0; border-radius: 50%; display: grid; place-items: center; background: rgba(0,0,0,.35); color: #fff; cursor: pointer; z-index: 2; }
+/* La bande du haut (.body-drag-top, ~60 px) sert à déplacer la fenêtre et avale les clics :
+   no-drag perce la zone sous la croix, et la croix est placée sous la bande par sécurité. */
+.lec-close { position: absolute; top: 72px; right: 24px; width: 40px; height: 40px; border: 0; border-radius: 50%; display: grid; place-items: center; background: rgba(0,0,0,.35); color: #fff; cursor: pointer; z-index: 2; -webkit-app-region: no-drag; }
 .lec-close:hover { background: rgba(0,0,0,.6); }
 .lec-now { display: flex; flex-direction: column; justify-content: center; gap: 22px; min-width: 0; }
 .lec-cover { width: min(56vh, 38vw, 640px); aspect-ratio: 1; border-radius: 10px; overflow: hidden; box-shadow: 0 24px 80px rgba(0,0,0,.55); background: #222; }
