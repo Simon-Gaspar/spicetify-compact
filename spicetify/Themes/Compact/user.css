@@ -1,0 +1,78 @@
+/* Compact — panneau Bibliothèque plus dense (Spotify 1.3.x)
+   Tout est sous body.acc-compact-rows : l'extension accueil-core.js ne pose cette classe que si
+   le patch 64 → 48 px de config-xpui.ini est bien appliqué (sinon la liste se décalerait).
+   Sélecteurs par attributs/ids stables : les classes sont hachées et changent à chaque version. */
+
+/* 48 px = valeur patchée dans config-xpui.ini [Patch] ; les deux doivent rester égales,
+   sinon la liste virtualisée se décale. */
+body.acc-compact-rows #Desktop_LeftSidebar_Id [role="grid"] > * [role="row"]:has([data-encore-id="listRow"]) {
+  height: 48px !important;
+  overflow: hidden;
+}
+body.acc-compact-rows #Desktop_LeftSidebar_Id [role="row"] [data-encore-id="listRow"] {
+  --box-padding: 6px 8px !important;
+  --box-min-block-size: 48px !important;
+  box-sizing: border-box !important;
+  max-height: 48px;
+  --encore-legacy-list-row-title-gap: 0px !important;
+}
+
+/* Vignettes 48 → 36 px (taille posée en style inline) */
+body.acc-compact-rows #Desktop_LeftSidebar_Id [role="row"] [data-encore-id="listRow"] [style*="width: 48px"] {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+}
+body.acc-compact-rows #Desktop_LeftSidebar_Id [role="row"] [data-encore-id="listRow"] [style*="width: 48px"] svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+/* Texte : titre 14 px, sous-titre 12 px */
+body.acc-compact-rows #Desktop_LeftSidebar_Id [role="row"] [data-encore-id="listRowTitle"] {
+  font-size: 0.875rem !important;
+  line-height: 1.2 !important;
+}
+body.acc-compact-rows #Desktop_LeftSidebar_Id [role="row"] [id^="listrow-subtitle"] {
+  font-size: 0.75rem !important;
+  line-height: 1.2 !important;
+}
+
+/* Bouton lecture au survol : se cale sur la vignette de 36 px */
+body.acc-compact-rows #Desktop_LeftSidebar_Id [role="row"] [class*="list-row__header-side"],
+body.acc-compact-rows #Desktop_LeftSidebar_Id [role="row"] [class*="list-row__header-side"] > *,
+body.acc-compact-rows #Desktop_LeftSidebar_Id [role="row"] [class*="list-row__header-side"] > * > *,
+body.acc-compact-rows #Desktop_LeftSidebar_Id [role="row"] [class*="list-row__header-side"] button {
+  max-height: 36px !important;
+  max-width: 36px !important;
+}
+body.acc-compact-rows #Desktop_LeftSidebar_Id [role="row"] [class*="list-row__header"] {
+  min-block-size: 0 !important;
+}
+
+/* Panneau de gauche retiré : la navigation passe par la page Accueil (custom app).
+   acc-app n'est posée par accueil-core.js que si cette custom app est installée.
+   La colonne « left-sidebar » de la grille principale se cale sur son contenu et tombe à 0. */
+body.acc-app #Desktop_LeftSidebar_Id {
+  display: none !important;
+}
+
+/* Sans panneau de gauche, les flèches ← → chevauchent les boutons de fenêtre macOS.
+   On les décale de 26 pt, soit une flèche à ~84 pt du bord, quel que soit le zoom
+   (--zoom-level, en %, posé sur .Root). Mac uniquement : classe posée par accueil-core.js. */
+body.acc-mac .main-globalNav-historyButtonsWrapper {
+  margin-left: 0 !important;
+  padding-left: calc(2600px / var(--zoom-level, 100)) !important;
+}
+
+/* Maison native en double avec le bouton « Accueil » de la custom app (même destination). */
+body.acc-app #global-nav-bar button[aria-label="Home"] {
+  display: none !important;
+}
+
+/* Plein écran : la vue « lecture » (custom app) remplace le plein écran natif ;
+   son entrée de navigation en haut est inutile (ouverture depuis la barre du lecteur). */
+body.acc-lecture .Root__now-playing-bar button[aria-label="Enter Full screen"],
+#global-nav-bar button[aria-label="Lecture"] {
+  display: none !important;
+}

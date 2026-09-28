@@ -1,0 +1,16 @@
+[
+  {
+    "name": "Compact",
+    "description": "Page d'accueil sur mesure (Musique / Podcasts, playlists en trois colonnes, filtres par style), lecture plein écran et bibliothèque compacte. Installation complète avec install.sh / install.cmd.",
+    "preview": "preview.png",
+    "readme": "README.md",
+    "usercss": "spicetify/Themes/Compact/user.css",
+    "schemes": "spicetify/Themes/Compact/color.ini",
+    "include": [
+      "https://raw.githubusercontent.com/Simon-Gaspar/spicetify-compact/main/spicetify/Extensions/accueil-core.js",
+      "https://raw.githubusercontent.com/Simon-Gaspar/spicetify-compact/main/spicetify/Extensions/lecture-core.js"
+    ],
+    "authors": [{ "name": "Simon Gaspar", "url": "https://github.com/Simon-Gaspar" }],
+    "tags": ["compact", "minimal", "home"]
+  }
+]
