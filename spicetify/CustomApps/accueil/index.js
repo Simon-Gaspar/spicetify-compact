@@ -11,9 +11,13 @@ const CACHE_MS = 5 * 60 * 1000;
 const cache = {};
 
 // ---------- styles ----------
-// Référence : les dossiers de genre de la bibliothèque. Chaque artiste prend le style du dossier
-// où il apparaît le plus ; le reste (albums, mix, nouveautés…) est classé par vote de ses artistes.
-const STYLE_FOLDERS = {
+// Référence : des dossiers de premier niveau de la bibliothèque, un dossier = un style. Chaque artiste
+// prend le style du dossier où il apparaît le plus ; le reste (albums, mix, nouveautés…) est classé
+// par vote de ses artistes.
+// Dossiers de style et leurs noms d'affichage. Si la bibliothèque en contient au moins un, seuls
+// ceux-là comptent (les autres dossiers — humeurs, partages… — sont ignorés) ; sinon, chaque dossier
+// de premier niveau est un style, sous son propre nom (capitales adoucies).
+const STYLE_LABELS = {
   "ELECTRO": "Électro",
   "HIP-HOP / RAP": "Hip-hop / Rap",
   "JAZZ / BLUES": "Jazz / Blues",
@@ -21,14 +25,26 @@ const STYLE_FOLDERS = {
   "INDIE / TRIP-HOP": "Indie / Trip-hop",
   "CLASSIQUE": "Classique",
 };
-const STYLES = Object.values(STYLE_FOLDERS);
+const IGNORED_FOLDERS = new Set(["SAISONS"]); // rangement des saisons (accueil-core.js), pas un style
 const MIXED = "Mixte";
+const styleLabel = (name) =>
+  STYLE_LABELS[name] ||
+  (name === name.toUpperCase() ? name.toLowerCase().replace(/(^|[\s/&-])(\p{L})/gu, (m, sep, c) => sep + c.toUpperCase()) : name);
+const hasPlaylist = (f) => (f.items || []).some((i) => i.type === "playlist" || (i.type === "folder" && hasPlaylist(i)));
+// Dossiers de style dans l'ordre de la bibliothèque : [{ label, folder }]
+function styleFoldersOf(tree) {
+  const folders = tree.items.filter((i) => i.type === "folder" && !IGNORED_FOLDERS.has(i.name) && hasPlaylist(i));
+  const listed = folders.filter((f) => STYLE_LABELS[f.name]);
+  return (listed.length ? listed : folders).map((folder) => ({ label: styleLabel(folder.name), folder }));
+}
 const STYLE_KEY = "accueil:styles";
 const STYLE_TTL = 7 * 86400000;
 let styleIndexPromise = null;
 let styleProgress = null; // { done, total } pendant la construction de l'index
 const styleListeners = new Set();
 const notifyStyles = () => styleListeners.forEach((f) => f());
+
+const warn = (where, e) => console.warn("[accueil]", where, e);
 
 function lsGet(key) {
   try { return JSON.parse(Spicetify.LocalStorage.get(key) || "null"); } catch { return null; }
@@ -54,7 +70,8 @@ async function trackArtists(uri, limit) {
 }
 
 async function buildStyleIndex() {
-  const tree = await Spicetify.Platform.RootlistAPI.getContents({});
+  const folders = styleFoldersOf(await Spicetify.Platform.RootlistAPI.getContents({}));
+  const styles = folders.map((f) => f.label);
   const playlists = {};
   const walk = (items, style) => {
     for (const i of items) {
@@ -62,7 +79,7 @@ async function buildStyleIndex() {
       else if (i.type === "playlist") playlists[i.uri] = style;
     }
   };
-  for (const f of tree.items) if (f.type === "folder" && STYLE_FOLDERS[f.name]) walk(f.items || [], STYLE_FOLDERS[f.name]);
+  for (const { label, folder } of folders) walk(folder.items || [], label);
 
   const votes = {};
   const uris = Object.keys(playlists);
@@ -84,9 +101,9 @@ async function buildStyleIndex() {
   const artists = {};
   for (const [a, v] of Object.entries(votes)) {
     const best = Object.entries(v).sort((x, y) => y[1] - x[1])[0][0];
-    artists[a] = STYLES.indexOf(best);
+    artists[a] = styles.indexOf(best);
   }
-  const idx = { at: Date.now(), playlists, artists, items: {} };
+  const idx = { v: 2, at: Date.now(), styles, playlists, artists, items: {} };
   lsSet(STYLE_KEY, idx);
   styleProgress = null;
   notifyStyles();
@@ -96,7 +113,8 @@ async function buildStyleIndex() {
 function getStyleIndex() {
   if (!styleIndexPromise) {
     const cached = lsGet(STYLE_KEY);
-    styleIndexPromise = cached && Date.now() - cached.at < STYLE_TTL ? Promise.resolve(cached) : buildStyleIndex();
+    // v2 : styles lus dans la bibliothèque (index v1 : liste figée, à reconstruire)
+    styleIndexPromise = cached?.v === 2 && Date.now() - cached.at < STYLE_TTL ? Promise.resolve(cached) : buildStyleIndex();
     styleIndexPromise.catch(() => { styleIndexPromise = null; styleProgress = null; notifyStyles(); });
   }
   return styleIndexPromise;
@@ -113,7 +131,7 @@ function voteStyle(artistUris, idx) {
   }
   if (!known || (artistUris.length > 3 && known < 3)) return MIXED;
   const [best, n] = Object.entries(count).sort((x, y) => y[1] - x[1])[0];
-  return n / known >= 0.4 ? STYLES[best] : MIXED;
+  return n / known >= 0.4 ? idx.styles[best] : MIXED;
 }
 
 let styleSaveTimer;
@@ -121,7 +139,7 @@ async function styleOf(card, idx) {
   if (idx.playlists[card.uri]) return idx.playlists[card.uri];
   if (idx.items[card.uri]) return idx.items[card.uri];
   let style = MIXED;
-  if (card.uri.startsWith("spotify:artist:")) style = idx.artists[card.uri] !== undefined ? STYLES[idx.artists[card.uri]] : MIXED;
+  if (card.uri.startsWith("spotify:artist:")) style = idx.artists[card.uri] !== undefined ? idx.styles[idx.artists[card.uri]] : MIXED;
   else if (card.artistUris?.length) style = voteStyle(card.artistUris, idx);
   else if (card.uri.startsWith("spotify:playlist:")) style = voteStyle(await trackArtists(card.uri, 60), idx);
   idx.items[card.uri] = style;
@@ -329,6 +347,86 @@ function openUri(uri) {
 }
 
 const likedUri = () => `spotify:user:${Spicetify.Platform.username}:collection`;
+const notify = (msg, isError) => Spicetify.showNotification?.(msg, isError);
+const errMsg = (e) => e?.message || String(e);
+const titles = (n) => (n > 1 ? `${n} titres` : "Titre");
+
+// ---------- glisser-déposer ----------
+// Spotify met les URI des titres glissés dans text/x-spotify-tracks (plusieurs si sélection
+// multiple) ; text/uri-list (liens open.spotify.com) en secours.
+const DRAG_TYPES = ["text/x-spotify-tracks", "text/uri-list"];
+const toUri = (s) => {
+  const m = s.match(/open\.spotify\.com\/(track|episode)\/([A-Za-z0-9]+)/);
+  return m ? `spotify:${m[1]}:${m[2]}` : s.trim();
+};
+function draggedUris(dt) {
+  const raw = dt.getData("text/x-spotify-tracks") || dt.getData("text/uri-list") || "";
+  return [...new Set(raw.split(/[\s,]+/).map(toUri).filter((u) => /^spotify:(track|episode):/.test(u)))];
+}
+
+// Props de cible de dépôt + état « survolé ». accept(uris) reçoit les titres lâchés.
+function useDrop(accept) {
+  const [over, setOver] = useState(false);
+  const ok = (e) => DRAG_TYPES.some((t) => e.dataTransfer.types.includes(t));
+  return [over, {
+    onDragOver: (e) => { if (!ok(e)) return; e.preventDefault(); if (!over) setOver(true); },
+    onDragLeave: (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOver(false); },
+    onDrop: (e) => {
+      if (!ok(e)) return;
+      e.preventDefault();
+      setOver(false);
+      const uris = draggedUris(e.dataTransfer);
+      if (uris.length) accept(uris);
+    },
+  }];
+}
+
+// Ajoute en fin de playlist, sans doublons.
+async function addToPlaylist(pl, uris) {
+  const P = Spicetify.Platform.PlaylistAPI;
+  try {
+    const have = new Set(((await P.getContents(pl.uri)).items || []).map((i) => i.uri));
+    const fresh = uris.filter((u) => !have.has(u));
+    if (!fresh.length) return notify(`Déjà dans ${pl.name}`);
+    await P.add(pl.uri, fresh, { after: "end" });
+    notify(`${titles(fresh.length)} ajouté${fresh.length > 1 ? "s" : ""} à ${pl.name}`);
+  } catch (e) {
+    notify("Ajout impossible : " + errMsg(e), true);
+  }
+}
+
+async function likeTracks(uris) {
+  const L = Spicetify.Platform.LibraryAPI;
+  const tracks = uris.filter((u) => u.startsWith("spotify:track:"));
+  if (!tracks.length) return notify("Seuls les titres peuvent être likés", true);
+  try {
+    const liked = await L.contains(...tracks);
+    const fresh = tracks.filter((u, i) => !liked[i]);
+    if (!fresh.length) return notify(tracks.length > 1 ? "Déjà dans les titres likés" : "Déjà liké");
+    await L.add({ uris: fresh });
+    notify(`${titles(fresh.length)} ajouté${fresh.length > 1 ? "s" : ""} aux titres likés`);
+  } catch (e) {
+    notify("Like impossible : " + errMsg(e), true);
+  }
+}
+
+// ---------- santé ----------
+// API internes manquantes (vérifiées par accueil-core.js) : une mise à jour de Spotify les a
+// renommées ou retirées, certaines fonctions ne marchent plus.
+function HealthBanner() {
+  const [missing, setMissing] = useState(() => window.AccueilCore?.missing || []);
+  useEffect(() => {
+    const refresh = () => setMissing(window.AccueilCore?.missing || []);
+    window.addEventListener("accueil:health", refresh);
+    return () => window.removeEventListener("accueil:health", refresh);
+  }, []);
+  if (!missing.length) return null;
+  return h("div", { className: "acc-alert" },
+    h("strong", null, "Spotify a changé une partie de ses API internes."),
+    ` Certaines fonctions peuvent ne plus marcher (${missing.join(", ")}). Mets à jour le thème depuis `,
+    h("a", { href: "https://github.com/Simon-Gaspar/spicetify-compact" }, "github.com/Simon-Gaspar/spicetify-compact"),
+    ", ou attends une mise à jour de Spicetify.");
+}
 
 // ---------- composants ----------
 
@@ -414,28 +512,28 @@ function useStyles(items) {
     }).then(flush);
     return () => { alive = false; };
   }, [idx, items]);
-  return { styles, progress: styleProgress };
+  return { styles, progress: styleProgress, names: idx?.styles || [] };
 }
 
 // Dossiers de style de la bibliothèque, par libellé (« Électro » → dossier ELECTRO)
 let styleFoldersPromise = null;
 const getStyleFolders = () =>
   (styleFoldersPromise ||= Spicetify.Platform.RootlistAPI.getContents({}).then((t) =>
-    Object.fromEntries(t.items.filter((i) => i.type === "folder" && STYLE_FOLDERS[i.name]).map((f) => [STYLE_FOLDERS[f.name], f]))));
+    Object.fromEntries(styleFoldersOf(t).map(({ label, folder }) => [label, folder]))));
 
 // Filtre par style ; le ▶ de chaque style lance tout le dossier correspondant en aléatoire.
-function StyleBar({ items, styles, progress, value, onChange }) {
+function StyleBar({ items, styles, names, progress, value, onChange }) {
   const [folders, setFolders] = useState({});
   const [busy, setBusy] = useState(null);
-  useEffect(() => { getStyleFolders().then(setFolders, () => {}); }, []);
+  useEffect(() => { getStyleFolders().then(setFolders, (e) => warn("dossiers de style", e)); }, []);
   if (progress) return h("div", { className: "acc-hint" }, `Analyse des styles de ta bibliothèque… ${progress.done}/${progress.total} playlists (une seule fois)`);
   const counts = {};
   for (const c of items) {
     const st = styles[c.uri];
     if (st) counts[st] = (counts[st] || 0) + 1;
   }
-  const options = [...STYLES, MIXED].filter((st) => counts[st]);
-  if (!options.length) return null;
+  const options = [...names, MIXED].filter((st) => counts[st]);
+  if (!names.length || !options.length) return null; // aucun dossier de style dans la bibliothèque
   const launch = async (st) => {
     setBusy(st);
     try { await playFolder(folders[st]); } catch (e) { Spicetify.showNotification?.("Lecture impossible : " + (e?.message || e), true); }
@@ -474,9 +572,11 @@ const COLUMNS = [
 ];
 
 // Vignette compacte pour les colonnes de playlists : grille dense, nom sous la pochette.
+// Les playlists à soi acceptent qu'on y dépose des titres.
 function Tile({ card, showOwner }) {
   const tip = card.name + (showOwner && card.baseSub ? ` — ${card.baseSub}` : "") + (card.n ? ` · ${card.n} écoute${card.n > 1 ? "s" : ""}` : "");
-  return h("div", { className: "acc-tile", onClick: () => openUri(card.uri), title: tip },
+  const [over, drop] = useDrop((uris) => addToPlaylist(card, uris));
+  return h("div", { className: "acc-tile" + (over ? " is-drop" : ""), onClick: () => openUri(card.uri), title: tip, ...(card.group === "self" ? drop : {}) },
     h("div", { className: "acc-tile-img" },
       card.img ? h("img", { src: card.img, loading: "lazy", alt: "", draggable: false }) : null,
       card.n > 0 && h("span", { className: "acc-tile-n" }, card.n),
@@ -499,7 +599,7 @@ function MyPlaylists() {
   const [sort, setSort] = useState("top");
   const [style, setStyle] = useState("all");
   const plays = usePlays();
-  const { styles, progress } = useStyles(state.data);
+  const { styles, progress, names } = useStyles(state.data);
   const sorted = useMemo(() => {
     const list = withPlays(state.data || [], plays);
     if (sort === "az") return list.sort(byName);
@@ -513,7 +613,7 @@ function MyPlaylists() {
   return h(Status, { state }, () =>
     h("section", { className: "acc-section" },
       h(Toolbar, null,
-        h(StyleBar, { items: sorted, styles, progress, value: style, onChange: setStyle }),
+        h(StyleBar, { items: sorted, styles, names, progress, value: style, onChange: setStyle }),
         h(Sorts, { options: sorts, value: sort, onChange: setSort })),
       h("div", { className: "acc-cols" },
         COLUMNS.map((c) => h(Column, { key: c.id + sort + style, id: c.id, label: c.label, items: shown.filter((p) => p.group === c.id) })))));
@@ -532,7 +632,7 @@ function MyAlbums() {
   const [sort, setSort] = useState("recent");
   const [style, setStyle] = useState("all");
   const plays = usePlays();
-  const { styles, progress } = useStyles(state.data);
+  const { styles, progress, names } = useStyles(state.data);
   const sorted = useMemo(() => {
     const list = withPlays(state.data || [], plays);
     if (sort === "top") return list.sort((a, b) => b.n - a.n || byRecent(a, b));
@@ -545,7 +645,7 @@ function MyAlbums() {
   return h(Status, { state }, () =>
     h("section", { className: "acc-section" },
       h(Toolbar, null,
-        h(StyleBar, { items: sorted, styles, progress, value: style, onChange: setStyle }),
+        h(StyleBar, { items: sorted, styles, names, progress, value: style, onChange: setStyle }),
         h(Sorts, { options: ALBUM_SORTS, value: sort, onChange: setSort })),
       h(SectionlessGrid, { key: sort + style, items: shown })));
 }
@@ -570,21 +670,22 @@ function HomeSections({ facet, tab, tabs }) {
 
 function StyledSections({ sections, limit }) {
   const all = useMemo(() => sections.flatMap((s) => s.items), [sections]);
-  const { styles, progress } = useStyles(all);
+  const { styles, progress, names } = useStyles(all);
   const [style, setStyle] = useState("all");
   const keep = byStyle(style, styles);
   const filtered = sections.map((s) => ({ ...s, items: s.items.filter(keep) })).filter((s) => s.items.length);
   return h(React.Fragment, null,
-    h(Toolbar, null, h(StyleBar, { items: all, styles, progress, value: style, onChange: setStyle })),
+    h(Toolbar, null, h(StyleBar, { items: all, styles, names, progress, value: style, onChange: setStyle })),
     filtered.length ? filtered.map((s) => h(Section, { key: s.title + style, title: s.title, items: s.items, limit })) : h("div", { className: "acc-empty" }, "Rien dans ce style ici."));
 }
 
 function LikedHero() {
-  return h("div", { className: "acc-liked", onClick: () => Spicetify.Platform.History.push("/collection/tracks") },
+  const [over, drop] = useDrop(likeTracks);
+  return h("div", { className: "acc-liked" + (over ? " is-drop" : ""), onClick: () => Spicetify.Platform.History.push("/collection/tracks"), ...drop },
     h("div", { className: "acc-liked-art" }, h("svg", { viewBox: "0 0 24 24", width: 28, height: 28, fill: "#fff" }, h("path", { d: "M12 21s-7.5-4.6-9.6-9.2C.8 8.3 3 4.5 6.6 4.5c2.1 0 3.6 1.2 4.4 2.5.8-1.3 2.3-2.5 4.4-2.5 3.6 0 5.8 3.8 4.2 7.3C19.5 16.4 12 21 12 21z" }))),
     h("div", { className: "acc-liked-text" },
       h("div", { className: "acc-liked-title" }, "Titres likés"),
-      h("div", { className: "acc-sub" }, "Lecture ou aléatoire")),
+      h("div", { className: "acc-sub" }, over ? "Lâcher pour liker" : "Lecture ou aléatoire")),
     h("button", { className: "acc-round is-ghost", title: "Lecture aléatoire", onClick: (e) => { e.stopPropagation(); play(likedUri(), true); } }, h(ShuffleIcon)),
     h("button", { className: "acc-round", title: "Lire", onClick: (e) => { e.stopPropagation(); play(likedUri(), false); } }, h(PlayIcon)));
 }
@@ -629,13 +730,14 @@ function SeasonHero() {
     window.addEventListener("accueil:season", load);
     return () => window.removeEventListener("accueil:season", load);
   }, []);
+  const [over, drop] = useDrop((uris) => addToPlaylist(pl, uris));
   if (!pl) return null;
   const img = pl.images?.[0]?.url;
-  return h("div", { className: "acc-liked", onClick: () => openUri(pl.uri) },
+  return h("div", { className: "acc-liked" + (over ? " is-drop" : ""), onClick: () => openUri(pl.uri), ...drop },
     h("div", { className: "acc-liked-art is-season" }, img ? h("img", { src: img, alt: "" }) : null),
     h("div", { className: "acc-liked-text" },
       h("div", { className: "acc-liked-title" }, pl.name),
-      h("div", { className: "acc-sub" }, "Saison en cours")),
+      h("div", { className: "acc-sub" }, over ? "Lâcher pour ajouter" : "Saison en cours")),
     h("button", { className: "acc-round", title: "Lire", onClick: (e) => { e.stopPropagation(); play(pl.uri); } }, h(PlayIcon)));
 }
 
@@ -653,6 +755,7 @@ function AccueilApp() {
 
   return h("div", { className: "acc-page" },
     h("style", null, CSS),
+    h(HealthBanner),
     h("header", { className: "acc-header" },
       h("nav", { className: "acc-main-tabs" },
         [["music", "Musique"], ["podcasts", "Podcasts"]].map(([id, label]) =>
@@ -745,5 +848,10 @@ button.acc-schip { padding: 5px 12px; }
 .acc-tile:hover .acc-tile-play, .acc-tile-play:focus-visible { opacity: 1; transform: none; }
 .acc-tile-name { margin-top: 7px; font-size: .8125rem; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .acc-empty { color: var(--acc-sub); padding: 40px 0; }
+.acc-liked.is-drop { background: var(--acc-chip-hover); box-shadow: inset 0 0 0 2px var(--acc-green); }
+.acc-tile.is-drop .acc-tile-img::after { content: ""; position: absolute; inset: 0; border: 3px solid var(--acc-green); border-radius: inherit; pointer-events: none; }
+.acc-tile.is-drop .acc-tile-img img { filter: brightness(.6); }
+.acc-alert { margin-bottom: 20px; padding: 12px 16px; border-radius: 8px; background: rgba(245,158,11,.14); color: #fcd9a0; font-size: .875rem; line-height: 1.45; }
+.acc-alert a { color: inherit; text-decoration: underline; }
 .acc-more { display: flex; justify-content: center; margin-top: 16px; }
 `;

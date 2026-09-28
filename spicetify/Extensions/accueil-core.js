@@ -7,11 +7,28 @@
 // 3. Saisons : au début de chaque saison astronomique, crée « automne '26 » (etc.), l'épingle,
 //    et range la saison précédente dans le dossier SAISONS. Une seule fois par saison.
 // 4. N'active le CSS compact du panneau (thème Compact) que si le patch 64 → 48 px est en place.
-(function accueilCore() {
-  if (!Spicetify?.Platform?.History || !Spicetify.Platform.LibraryAPI || !Spicetify.Platform.RootlistAPI || !Spicetify.Player?.addEventListener || !Spicetify.LocalStorage) {
-    setTimeout(accueilCore, 300);
+// 5. Vérifie les API internes de Spotify dont dépend le thème et signale celles qui manquent
+//    (elles changent parfois avec les mises à jour de Spotify).
+(function accueilCore(tries = 0) {
+  const missingOf = (list) => list.filter(([, get]) => { try { return !get(); } catch { return true; } }).map(([name]) => name);
+  const BASE = [
+    ["History", () => Spicetify.Platform.History],
+    ["LibraryAPI", () => Spicetify.Platform.LibraryAPI],
+    ["RootlistAPI", () => Spicetify.Platform.RootlistAPI],
+    ["Player", () => Spicetify.Player.addEventListener],
+    ["LocalStorage", () => Spicetify.LocalStorage],
+  ];
+  const base = missingOf(BASE);
+  if (base.length) {
+    // ~20 s sans ces API : ce n'est plus un chargement lent, Spotify les a changées.
+    if (tries === 66) {
+      console.warn("[accueil] API introuvables :", base.join(", "));
+      Spicetify.showNotification?.(`Thème Compact : API Spotify introuvables (${base.join(", ")}), l'accueil ne peut pas démarrer`, true);
+    }
+    setTimeout(() => accueilCore(tries + 1), 300);
     return;
   }
+  const warn = (where) => (e) => console.warn("[accueil]", where, e);
 
   // ---------- 1. redirection ----------
   // Seulement si la custom app « accueil » est installée (le Marketplace n'installe que le thème
@@ -58,7 +75,7 @@
     if (Date.now() - lastSync < MIN_GAP) return;
     lastSync = Date.now();
     let items;
-    try { items = await recentItems(); } catch { return; }
+    try { items = await recentItems(); } catch (e) { warn("écoutes")(e); return; }
 
     let plays = load();
     if (plays._v !== 2) {
@@ -140,9 +157,9 @@
     Spicetify.showNotification?.(`${created ? "Nouvelle saison : " + name + " créée et épinglée" : name + " épinglée"}${moved ? " · " + moved + " rangée dans SAISONS" : ""}`);
   }
 
-  window.AccueilCore = { currentSeason, normName };
-  seasonCheck().catch(() => {});
-  setInterval(() => seasonCheck().catch(() => {}), 6 * 3600 * 1000);
+  window.AccueilCore = { currentSeason, normName, missing: [] };
+  seasonCheck().catch(warn("saisons"));
+  setInterval(() => seasonCheck().catch(warn("saisons")), 6 * 3600 * 1000);
 
   // ---------- 4. garde-fou du panneau compact ----------
   // Le CSS réduit les lignes à 48 px ; il ne doit s'appliquer que si la liste virtualisée
@@ -151,4 +168,30 @@
     .then((r) => r.text())
     .then((js) => { if (/LIST_DEFAULT\|\|\w+\?48:32/.test(js)) document.body.classList.add("acc-compact-rows"); })
     .catch(() => {});
+
+  // ---------- 5. santé ----------
+  // Utilisées par l'accueil et la vue Lecture. Vérifiées après 10 s : certaines (GraphQL)
+  // se remplissent après le démarrage. La page Accueil affiche la liste (window.AccueilCore.missing) ;
+  // la notification ne sort qu'une fois par version de Spotify.
+  const P = () => Spicetify.Platform;
+  const FEATURES = [
+    ["accueil Spotify", () => Spicetify.GraphQL.Definitions.home],
+    ["bibliothèque", () => P().LibraryAPI.getContents],
+    ["likes", () => P().LibraryAPI.add && P().LibraryAPI.contains],
+    ["playlists", () => P().PlaylistAPI.getContents && P().PlaylistAPI.add],
+    ["saisons", () => P().RootlistAPI.createPlaylist && P().RootlistAPI.move && P().LibraryAPI.pin],
+    ["lecture", () => P().PlayerAPI.play && Spicetify.Player.playUri],
+    ["file d'attente", () => Spicetify.Queue && P().PlayerAPI.skipTo],
+  ];
+  setTimeout(() => {
+    const missing = missingOf(FEATURES);
+    window.AccueilCore.missing = missing;
+    window.dispatchEvent(new Event("accueil:health"));
+    if (!missing.length) return;
+    console.warn("[accueil] fonctions touchées par un changement d'API Spotify :", missing.join(", "));
+    const key = `${P().version || "?"}|${missing.join(",")}`;
+    if (Spicetify.LocalStorage.get("accueil:health") === key) return;
+    Spicetify.LocalStorage.set("accueil:health", key);
+    Spicetify.showNotification?.(`Thème Compact : Spotify a changé des API internes (${missing.join(", ")})`, true);
+  }, 10000);
 })();
