@@ -1,5 +1,5 @@
 // Lecture — vue plein écran du titre en cours, avec la file « À suivre » en liste.
-// Ouverte depuis le bouton ajouté à la barre du lecteur (extension lecture-core.js), fermée par Échap.
+// Ouverte par le bouton plein écran natif de la barre du lecteur (détourné par lecture-core.js), fermée par Échap.
 
 const { React } = Spicetify;
 const { useState, useEffect } = React;

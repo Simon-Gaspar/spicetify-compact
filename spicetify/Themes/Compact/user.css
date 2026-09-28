@@ -73,16 +73,8 @@ body.acc-app #global-nav-bar button[aria-label="Home"] {
   display: none !important;
 }
 
-/* Plein écran : la vue « lecture » (custom app) remplace le plein écran natif ;
-   son entrée de navigation en haut est inutile (ouverture depuis la barre du lecteur). */
-/* Bouton Lecture (lecture-core.js) tout à droite de la barre, à la place du plein écran natif. */
-.main-nowPlayingBar-extraControls > [data-acc-lecture] {
-  order: 99;
-}
-
-/* data-testid plutôt que l'aria-label, traduit selon la langue de Spotify. */
-body.acc-lecture .Root__now-playing-bar button[data-testid="fullscreen-mode-button"],
-body.acc-lecture .Root__now-playing-bar button[aria-label="Enter Full screen"],
+/* Plein écran : le bouton natif de la barre ouvre la vue « lecture » (custom app, détournée par
+   lecture-core.js) ; son entrée de navigation en haut est inutile. */
 #global-nav-bar button[aria-label="Lecture"] {
   display: none !important;
 }
