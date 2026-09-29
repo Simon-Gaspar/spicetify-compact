@@ -741,6 +741,25 @@ function SeasonHero() {
     h("button", { className: "acc-round", title: "Lire", onClick: (e) => { e.stopPropagation(); play(pl.uri); } }, h(PlayIcon)));
 }
 
+// « Your All-Time Top Songs » (playlist générée par Spotify), épinglée à côté de la saison.
+const TOP_RE = /all[- ]time top songs|de tous les temps/i;
+
+function TopHero() {
+  const [pl, setPl] = useState(null);
+  useEffect(() => {
+    Spicetify.Platform.LibraryAPI.getContents({ filters: ["2"], flattenTree: true, limit: 400 })
+      .then((r) => setPl((r.items || []).find((i) => i.type === "playlist" && TOP_RE.test(i.name || "")) || null), () => {});
+  }, []);
+  if (!pl) return null;
+  const img = pl.images?.[0]?.url;
+  return h("div", { className: "acc-liked", onClick: () => openUri(pl.uri) },
+    h("div", { className: "acc-liked-art" }, img ? h("img", { src: img, alt: "" }) : null),
+    h("div", { className: "acc-liked-text" },
+      h("div", { className: "acc-liked-title" }, "All-Time Top"),
+      h("div", { className: "acc-sub" }, "Tes titres de toujours")),
+    h("button", { className: "acc-round", title: "Lire", onClick: (e) => { e.stopPropagation(); play(pl.uri); } }, h(PlayIcon)));
+}
+
 function AccueilApp() {
   const [main, setMain] = useState("music");
   const [sub, setSub] = useState({ music: "playlists", podcasts: "episodes" });
@@ -760,7 +779,7 @@ function AccueilApp() {
       h("nav", { className: "acc-main-tabs" },
         [["music", "Musique"], ["podcasts", "Podcasts"]].map(([id, label]) =>
           h("button", { key: id, className: "acc-main-tab" + (main === id ? " is-on" : ""), onClick: () => setMain(id) }, label))),
-      h("div", { className: "acc-heroes" }, h(SeasonHero), h(LikedHero))),
+      h("div", { className: "acc-heroes" }, h(TopHero), h(SeasonHero), h(LikedHero))),
     h("nav", { className: "acc-subnav" },
       tabs.map((t) => h("button", { key: t.id, className: "acc-chip" + (t.id === tab.id ? " is-on" : ""), onClick: () => setSub({ ...sub, [main]: t.id }) }, t.label))),
     body);

@@ -1,8 +1,8 @@
-// Lecture — vue plein écran du titre en cours, avec la file « À suivre » en liste.
+// Lecture — vue plein écran du titre en cours, avec les paroles synchronisées et la file « À suivre ».
 // Ouverte par le bouton plein écran natif de la barre du lecteur (détourné par lecture-core.js), fermée par Échap.
 
 const { React } = Spicetify;
-const { useState, useEffect } = React;
+const { useState, useEffect, useRef } = React;
 const h = React.createElement;
 
 // ---------- état du lecteur ----------
@@ -75,6 +75,44 @@ function close() {
   else H.push("/accueil");
 }
 
+// ---------- paroles ----------
+// Même source que la vue Paroles de Spotify : spclient color-lyrics/v2 (Musixmatch, etc.),
+// synchronisées ligne par ligne quand c'est possible. Réponse 404 = pas de paroles pour ce titre.
+const lyricsCache = new Map();
+
+async function fetchLyrics(item) {
+  const id = item.uri.split(":")[2];
+  const image = item.metadata?.image_url || item.images?.[0]?.url || "";
+  const token = Spicetify.Platform.AuthorizationAPI.getState().token.accessToken;
+  const r = await fetch(`https://spclient.wg.spotify.com/color-lyrics/v2/track/${id}/image/${encodeURIComponent(image)}?format=json&vocalRemoval=false&market=from_token`,
+    { headers: { Authorization: `Bearer ${token}`, "app-platform": "WebPlayer" } });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`paroles : HTTP ${r.status}`);
+  const { lyrics } = await r.json();
+  const synced = lyrics.syncType === "LINE_SYNCED";
+  return {
+    synced,
+    provider: lyrics.providerDisplayName || "",
+    lines: (lyrics.lines || []).map((l) => ({ t: +l.startTimeMs, text: (l.words || "").trim() })),
+  };
+}
+
+function useLyrics(item) {
+  const uri = item?.uri;
+  const [state, setState] = useState({ uri: null });
+  useEffect(() => {
+    if (!uri?.startsWith("spotify:track:")) return setState({ uri, lyrics: null });
+    if (lyricsCache.has(uri)) return setState({ uri, lyrics: lyricsCache.get(uri) });
+    let alive = true;
+    setState({ uri, loading: true });
+    fetchLyrics(item).then(
+      (lyrics) => { lyricsCache.set(uri, lyrics); alive && setState({ uri, lyrics }); },
+      (error) => alive && setState({ uri, error }));
+    return () => { alive = false; };
+  }, [uri]);
+  return state.uri === uri ? state : { uri, loading: true };
+}
+
 // ---------- icônes ----------
 
 const svg = (d, props = {}) => h("svg", { viewBox: "0 0 24 24", width: 20, height: 20, fill: "currentColor", ...props }, h("path", { d }));
@@ -132,12 +170,49 @@ function UpNext({ now }) {
       h("div", { className: "lec-row-title" }, t.title),
       h("div", { className: "lec-row-artist" }, t.artist)),
     h("span", { className: "lec-row-dur" }, t.duration ? fmt(t.duration) : ""));
-  return h("aside", { className: "lec-queue" },
-    h("h2", null, "À suivre"),
-    h("div", { className: "lec-queue-list" },
+  return h("div", { className: "lec-queue-list" },
       queued.length > 0 && h(React.Fragment, null, h("div", { className: "lec-queue-label" }, "Dans ta file"), queued.map(row)),
       rest.length > 0 && h(React.Fragment, null, h("div", { className: "lec-queue-label" }, now.context ? `Ensuite depuis ${now.context}` : "Ensuite"), rest.map(row)),
-      !now.next.length && h("div", { className: "lec-queue-empty" }, "Rien à suivre.")));
+      !now.next.length && h("div", { className: "lec-queue-empty" }, "Rien à suivre."));
+}
+
+function Lyrics({ now, state }) {
+  const listRef = useRef(null);
+  const pausedUntil = useRef(0); // l'auto-défilement s'arrête 4 s après un défilement manuel
+  const { lyrics } = state;
+  const active = lyrics?.synced ? lyrics.lines.findLastIndex((l) => l.t <= now.progress + 200) : -1;
+
+  useEffect(() => {
+    if (active < 0 || Date.now() < pausedUntil.current) return;
+    listRef.current?.querySelector(`[data-i="${active}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [active, state.uri]);
+
+  if (state.loading) return h("div", { className: "lec-queue-empty" }, "Chargement des paroles…");
+  if (state.error) return h("div", { className: "lec-queue-empty" }, "Paroles indisponibles pour le moment.");
+  if (!lyrics?.lines.length) return h("div", { className: "lec-queue-empty" }, "Pas de paroles pour ce titre.");
+
+  return h("div", { className: "lec-lyrics" + (lyrics.synced ? " is-synced" : ""), ref: listRef, onWheel: () => { pausedUntil.current = Date.now() + 4000; } },
+    lyrics.lines.map((l, i) => h("p", {
+      key: i,
+      "data-i": i,
+      className: "lec-line" + (i === active ? " is-active" : i < active ? " is-past" : ""),
+      onClick: lyrics.synced ? () => { pausedUntil.current = 0; Spicetify.Player.seek(l.t); } : undefined,
+    }, l.text || "♪")),
+    lyrics.provider && h("div", { className: "lec-lyrics-credit" }, `Paroles : ${lyrics.provider}`));
+}
+
+// Panneau de droite : Paroles ou À suivre. Sans paroles, on reste sur la file.
+function SidePanel({ now }) {
+  const lyricsState = useLyrics(now.item);
+  const [tab, setTab] = useState(() => Spicetify.LocalStorage.get("lecture:tab") || "lyrics");
+  const choose = (t) => { setTab(t); Spicetify.LocalStorage.set("lecture:tab", t); };
+  const noLyrics = !lyricsState.loading && !lyricsState.lyrics?.lines?.length;
+  const shown = tab === "lyrics" && !noLyrics ? "lyrics" : "queue";
+  return h("aside", { className: "lec-queue" },
+    h("div", { className: "lec-tabs" },
+      h("button", { className: "lec-tab" + (shown === "lyrics" ? " is-on" : ""), disabled: noLyrics, title: noLyrics ? "Pas de paroles pour ce titre" : undefined, onClick: () => choose("lyrics") }, "Paroles"),
+      h("button", { className: "lec-tab" + (shown === "queue" ? " is-on" : ""), onClick: () => choose("queue") }, "À suivre")),
+    shown === "lyrics" ? h(Lyrics, { now, state: lyricsState }) : h(UpNext, { now }));
 }
 
 function LectureApp() {
@@ -170,7 +245,7 @@ function LectureApp() {
           now.context && h(React.Fragment, null, " · ", h("a", { onClick: () => openUri(now.contextUri) }, now.context)))),
       h(Progress, { now }),
       h(Controls, { now })),
-    h(UpNext, { now }));
+    h(SidePanel, { now }));
 }
 
 function render() {
@@ -214,7 +289,18 @@ body.lec-open *:has(.lec) { transform: none !important; will-change: auto !impor
 .lec-ctl.is-heart { margin-left: 12px; }
 .lec-one { position: absolute; top: 6px; right: 6px; font-size: .625rem; font-weight: 800; }
 .lec-queue { display: flex; flex-direction: column; min-height: 0; min-width: 0; padding: 18px 8px 18px 18px; border-radius: 14px; background: rgba(0,0,0,.28); backdrop-filter: blur(8px); }
-.lec-queue h2 { font-size: 1.25rem; font-weight: 800; margin: 0 10px 10px 0; }
+.lec-tabs { display: flex; gap: 6px; margin: 0 10px 12px 0; }
+.lec-tab { border: 0; border-radius: 999px; padding: 6px 14px; background: rgba(255,255,255,.08); color: rgba(255,255,255,.75); font-size: .875rem; font-weight: 700; cursor: pointer; }
+.lec-tab:hover:not(:disabled) { color: #fff; background: rgba(255,255,255,.14); }
+.lec-tab.is-on { background: #fff; color: #000; }
+.lec-tab:disabled { opacity: .35; cursor: default; }
+.lec-lyrics { overflow-y: auto; min-height: 0; padding: 8px 14px 40vh 4px; scrollbar-width: thin; }
+.lec-line { margin: 0 0 14px; font-size: clamp(1.1rem, 1.6vw, 1.6rem); font-weight: 700; line-height: 1.35; color: rgba(255,255,255,.9); }
+.lec-lyrics.is-synced .lec-line { color: rgba(255,255,255,.38); cursor: pointer; transition: color .25s; }
+.lec-lyrics.is-synced .lec-line:hover { color: rgba(255,255,255,.7); }
+.lec-lyrics.is-synced .lec-line.is-past { color: rgba(255,255,255,.55); }
+.lec-lyrics.is-synced .lec-line.is-active { color: #fff; }
+.lec-lyrics-credit { margin-top: 24px; font-size: .75rem; color: rgba(255,255,255,.45); }
 .lec-queue-list { overflow-y: auto; min-height: 0; padding-right: 10px; }
 .lec-queue-label { margin: 14px 0 6px; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: rgba(255,255,255,.55); }
 .lec-queue-label:first-child { margin-top: 0; }
