@@ -11,7 +11,8 @@ Pour **Spotify sur ordinateur, version téléchargée sur spotify.com** (pas cel
 - **Écouter plus tard** : clic droit sur un titre, un album, une playlist ou un artiste → « Écouter plus tard » (ou l'horloge dans la vue Lecture) pour le mettre de côté sans le liker. Onglet « Plus tard » de l'accueil : ce qui a été joué est marqué « Écouté ». Liste gardée sur cet ordinateur uniquement.
 - **Discographie complète** : clic droit sur un artiste, un album ou un titre → « Discographie complète » : toutes les sorties de l'artiste, filtrables (albums, EP, singles, compilations, déjà dans ta bibliothèque) et triables par date.
 - **Mes albums par date de sortie** : tris « Sortie ↓ » et « Sortie ↑ » (dates lues une fois, puis gardées en cache).
-- Panneau de gauche masqué, interface épurée, bibliothèque plus dense.
+- **Clic droit partout** : les cartes de l'accueil (playlists, albums, mix, discographie, « Plus tard ») et la file « À suivre » ouvrent le vrai menu de Spotify.
+- Panneau de gauche masqué, interface épurée (bouton « Studio » retiré), bibliothèque plus dense.
 
 ## Installer
 

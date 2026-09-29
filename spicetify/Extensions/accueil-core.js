@@ -288,5 +288,36 @@
     })
     .catch(() => {});
 
-  Object.assign(window.AccueilCore, { readLater, addLater, removeLater, inLater });
+  // ---------- 7. menus clic droit ----------
+  // Aiguilleur de la bibliothèque native : ({ item }) => menu complet selon item.type (playlist,
+  // album, titre, artiste, épisode, émission…). Non exposé par Spicetify (son « PlaylistMenu » est
+  // en fait le bouton « ajouter à une playlist ») : on le cherche une fois parmi les modules webpack.
+  let itemMenu;
+  function findItemMenu() {
+    if (itemMenu !== undefined) return itemMenu;
+    itemMenu = null;
+    try {
+      let req;
+      window.webpackChunkclient_web.push([[Symbol("accueil")], {}, (r) => { req = r; }]);
+      for (const id of Object.keys(req.m)) {
+        let ex;
+        try { ex = req(id); } catch { continue; }
+        if (!ex || typeof ex !== "object") continue;
+        for (const k of Object.keys(ex)) {
+          let fn;
+          try { fn = ex[k]; } catch { continue; }
+          if (typeof fn !== "function") continue;
+          const src = Function.prototype.toString.call(fn);
+          if (src.length < 2000 && /^\(\{item:\w+\}\)=>\{switch\(\w+\.type\)\{case/.test(src) && src.includes(".PLAYLIST:") && src.includes(".ALBUM:")) {
+            itemMenu = fn;
+            return itemMenu;
+          }
+        }
+      }
+    } catch (e) { warn("menus")(e); }
+    if (!itemMenu) console.warn("[accueil] menu clic droit natif introuvable, menus de secours");
+    return itemMenu;
+  }
+
+  Object.assign(window.AccueilCore, { readLater, addLater, removeLater, inLater, findItemMenu });
 })();

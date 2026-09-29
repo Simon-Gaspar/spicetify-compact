@@ -475,13 +475,28 @@ const ShuffleIcon = () =>
   h("svg", { viewBox: "0 0 24 24", width: 18, height: 18, fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" },
     h("path", { d: "M3 6h3.5c2 0 3.2 1 4.3 2.7l2.4 3.6c1.1 1.7 2.3 2.7 4.3 2.7H21M3 18h3.5c1.4 0 2.4-.5 3.2-1.4M13.3 7.4C14.1 6.5 15.1 6 16.5 6H21M18 3l3 3-3 3M18 15l3 3-3 3" }));
 
+// Clic droit : vrai menu contextuel de Spotify autour des cartes de la page, celui de la
+// bibliothèque native (trouvé par l'extension, window.AccueilCore.findItemMenu). En secours, les
+// menus exposés par Spicetify (sans « PlaylistMenu », qui n'est pas un menu contextuel).
+const FALLBACK_MENUS = { album: "AlbumMenu", artist: "ArtistMenu", track: "TrackMenu", show: "PodcastShowMenu" };
+function withMenu(uri, el, extra = {}) {
+  const RC = Spicetify.ReactComponent;
+  const type = uri?.split(":")[1];
+  if (!RC?.RightClickMenu || !type) return el;
+  const dispatcher = window.AccueilCore?.findItemMenu?.();
+  let menu = null;
+  if (dispatcher) menu = h(dispatcher, { item: { type, uri, isPlayable: true, ...extra } });
+  else if (RC[FALLBACK_MENUS[type]]) menu = h(RC[FALLBACK_MENUS[type]], { uri });
+  return menu ? h(RC.RightClickMenu, { trigger: "right-click", menu }, el) : el;
+}
+
 function Card({ card }) {
-  return h("div", { className: "acc-card", onClick: () => openUri(card.uri), title: card.name },
+  return withMenu(card.uri, h("div", { className: "acc-card", onClick: () => openUri(card.uri), title: card.name },
     h("div", { className: "acc-cover" + (card.round ? " is-round" : "") },
       card.img ? h("img", { src: card.img, loading: "lazy", alt: "", draggable: false }) : h("div", { className: "acc-ph" }),
       h("button", { className: "acc-play", "aria-label": "Lire " + card.name, onClick: (e) => { e.stopPropagation(); play(card.uri); } }, h(PlayIcon))),
     h("div", { className: "acc-name" }, card.name),
-    card.sub && h("div", { className: "acc-sub" }, card.sub));
+    card.sub && h("div", { className: "acc-sub" }, card.sub)));
 }
 
 function Grid({ items }) {
@@ -616,12 +631,12 @@ const COLUMNS = [
 function Tile({ card, showOwner }) {
   const tip = card.name + (showOwner && card.baseSub ? ` — ${card.baseSub}` : "") + (card.n ? ` · ${card.n} écoute${card.n > 1 ? "s" : ""}` : "");
   const [over, drop] = useDrop((uris) => addToPlaylist(card, uris));
-  return h("div", { className: "acc-tile" + (over ? " is-drop" : ""), onClick: () => openUri(card.uri), title: tip, ...(card.group === "self" ? drop : {}) },
+  return withMenu(card.uri, h("div", { className: "acc-tile" + (over ? " is-drop" : ""), onClick: () => openUri(card.uri), title: tip, ...(card.group === "self" ? drop : {}) },
     h("div", { className: "acc-tile-img" },
       card.img ? h("img", { src: card.img, loading: "lazy", alt: "", draggable: false }) : null,
       card.n > 0 && h("span", { className: "acc-tile-n" }, card.n),
       h("button", { className: "acc-tile-play", "aria-label": "Lire " + card.name, onClick: (e) => { e.stopPropagation(); play(card.uri); } }, h(PlayIcon))),
-    h("div", { className: "acc-tile-name" }, card.name));
+    h("div", { className: "acc-tile-name" }, card.name)));
 }
 
 function Column({ id, label, items }) {
@@ -783,12 +798,12 @@ function SeasonHero() {
   const [over, drop] = useDrop((uris) => addToPlaylist(pl, uris));
   if (!pl) return null;
   const img = pl.images?.[0]?.url;
-  return h("div", { className: "acc-liked" + (over ? " is-drop" : ""), onClick: () => openUri(pl.uri), ...drop },
+  return withMenu(pl.uri, h("div", { className: "acc-liked" + (over ? " is-drop" : ""), onClick: () => openUri(pl.uri), ...drop },
     h("div", { className: "acc-liked-art is-season" }, img ? h("img", { src: img, alt: "" }) : null),
     h("div", { className: "acc-liked-text" },
       h("div", { className: "acc-liked-title" }, pl.name),
       h("div", { className: "acc-sub" }, over ? "Lâcher pour ajouter" : "Saison en cours")),
-    h("button", { className: "acc-round", title: "Lire", onClick: (e) => { e.stopPropagation(); play(pl.uri); } }, h(PlayIcon)));
+    h("button", { className: "acc-round", title: "Lire", onClick: (e) => { e.stopPropagation(); play(pl.uri); } }, h(PlayIcon))));
 }
 
 // ---------- plus tard ----------
@@ -822,14 +837,14 @@ async function playTracks(uris) {
 
 function LaterCard({ item }) {
   const remove = (e) => { e.stopPropagation(); window.AccueilCore?.removeLater?.([item.uri]); };
-  return h("div", { className: "acc-card" + (item.played ? " is-played" : ""), onClick: () => openUri(item.uri), title: item.name },
+  return withMenu(item.uri, h("div", { className: "acc-card" + (item.played ? " is-played" : ""), onClick: () => openUri(item.uri), title: item.name },
     h("div", { className: "acc-cover" + (item.round ? " is-round" : "") },
       item.img ? h("img", { src: item.img, loading: "lazy", alt: "", draggable: false }) : h("div", { className: "acc-ph" }),
       item.played && h("span", { className: "acc-badge" }, "Écouté"),
       h("button", { className: "acc-remove", title: "Retirer de « Plus tard »", onClick: remove }, "×"),
       h("button", { className: "acc-play", "aria-label": "Lire " + item.name, onClick: (e) => { e.stopPropagation(); play(item.uri); } }, h(PlayIcon))),
     h("div", { className: "acc-name" }, item.name),
-    h("div", { className: "acc-sub" }, [LATER_KINDS.find((k) => k.id === item.kind)?.label.replace(/s$/, ""), item.sub].filter(Boolean).join(" · ")));
+    h("div", { className: "acc-sub" }, [LATER_KINDS.find((k) => k.id === item.kind)?.label.replace(/s$/, ""), item.sub].filter(Boolean).join(" · "))));
 }
 
 function Later() {
@@ -944,12 +959,12 @@ function TopHero() {
   }, []);
   if (!pl) return null;
   const img = pl.images?.[0]?.url;
-  return h("div", { className: "acc-liked", onClick: () => openUri(pl.uri) },
+  return withMenu(pl.uri, h("div", { className: "acc-liked", onClick: () => openUri(pl.uri) },
     h("div", { className: "acc-liked-art" }, img ? h("img", { src: img, alt: "" }) : null),
     h("div", { className: "acc-liked-text" },
       h("div", { className: "acc-liked-title" }, "All-Time Top"),
       h("div", { className: "acc-sub" }, "Tes titres de toujours")),
-    h("button", { className: "acc-round", title: "Lire", onClick: (e) => { e.stopPropagation(); play(pl.uri); } }, h(PlayIcon)));
+    h("button", { className: "acc-round", title: "Lire", onClick: (e) => { e.stopPropagation(); play(pl.uri); } }, h(PlayIcon))));
 }
 
 function AccueilApp() {

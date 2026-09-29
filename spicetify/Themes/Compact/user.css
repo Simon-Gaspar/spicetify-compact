@@ -78,3 +78,9 @@ body.acc-app #global-nav-bar button[aria-label="Home"] {
 #global-nav-bar button[aria-label="Lecture"] {
   display: none !important;
 }
+
+/* Bouton « Studio » (création assistée par IA) de la barre du haut : retiré. Repéré par son
+   image plutôt que par son aria-label, traduit selon la langue. */
+#global-nav-bar button:has(> img[src*="producer"]) {
+  display: none !important;
+}

@@ -164,7 +164,14 @@ function Controls({ now }) {
 function UpNext({ now }) {
   const queued = now.next.filter((t) => t.queued);
   const rest = now.next.filter((t) => !t.queued);
-  const row = (t, i) => h("div", {
+  const RC = Spicetify.ReactComponent;
+  const dispatcher = window.AccueilCore?.findItemMenu?.();
+  const menu = (uri, el) => {
+    if (!RC?.RightClickMenu) return el;
+    const m = dispatcher ? h(dispatcher, { item: { type: uri.split(":")[1], uri, isPlayable: true } }) : RC.TrackMenu && h(RC.TrackMenu, { uri });
+    return m ? h(RC.RightClickMenu, { key: el.key, trigger: "right-click", menu: m }, el) : el;
+  };
+  const row = (t, i) => menu(t.uri, h("div", {
     key: t.uid || t.uri + i,
     className: "lec-row",
     title: "Passer à ce titre",
@@ -174,7 +181,7 @@ function UpNext({ now }) {
     h("div", { className: "lec-row-text" },
       h("div", { className: "lec-row-title" }, t.title),
       h("div", { className: "lec-row-artist" }, t.artist)),
-    h("span", { className: "lec-row-dur" }, t.duration ? fmt(t.duration) : ""));
+    h("span", { className: "lec-row-dur" }, t.duration ? fmt(t.duration) : "")));
   return h("div", { className: "lec-queue-list" },
       queued.length > 0 && h(React.Fragment, null, h("div", { className: "lec-queue-label" }, "Dans ta file"), queued.map(row)),
       rest.length > 0 && h(React.Fragment, null, h("div", { className: "lec-queue-label" }, now.context ? `Ensuite depuis ${now.context}` : "Ensuite"), rest.map(row)),
