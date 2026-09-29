@@ -14,5 +14,13 @@ spicetify config custom_apps accueil custom_apps lecture extensions accueil-core
 if ! grep -q 'xpui-routes-your-library-x.js_find_0' "$CFG/config-xpui.ini"; then
   perl -0pi -e 's/\[Patch\]\n/[Patch]\nxpui-routes-your-library-x.js_find_0 = (LIST_DEFAULT\\|\\|\\w+)\\?64:32\nxpui-routes-your-library-x.js_repl_0 = \${1}?48:32\n/' "$CFG/config-xpui.ini"
 fi
-yes | spicetify backup apply
+# Sauvegarde de Spotify : « backup » refuse d'en refaire une si celle de cette version existe déjà
+# (réinstallation, mise à jour du thème) ; il suffit alors de réappliquer.
+backup_version=$(sed -n '/^\[Backup\]/,/^\[/s/^version *= *//p' "$CFG/config-xpui.ini")
+spotify_version=$(defaults read /Applications/Spotify.app/Contents/Info.plist CFBundleShortVersionString)
+if [[ -n "$backup_version" && "$backup_version" == "$spotify_version"* ]]; then
+  spicetify apply
+else
+  yes | spicetify backup apply
+fi
 echo "Terminé. Après chaque mise à jour de Spotify, relance : spicetify backup apply"

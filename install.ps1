@@ -37,5 +37,14 @@ if ($text -notmatch 'xpui-routes-your-library-x\.js_find_0') {
   [IO.File]::WriteAllText($ini, $text)
 }
 
-spicetify backup apply
+# Sauvegarde de Spotify : « backup » refuse d'en refaire une si celle de cette version existe déjà
+# (réinstallation, mise à jour du thème) ; il suffit alors de réappliquer.
+$text = [IO.File]::ReadAllText($ini)
+$backupVersion = if ($text -match '(?ms)^\[Backup\][^\[]*?^version\s*=\s*(\S+)') { $Matches[1] } else { "" }
+$spotifyVersion = (Get-Item "$env:APPDATA\Spotify\Spotify.exe").VersionInfo.ProductVersion
+if ($backupVersion -and $spotifyVersion -and $backupVersion.StartsWith($spotifyVersion)) {
+  spicetify apply
+} else {
+  "y`ny`ny" | spicetify backup apply
+}
 Write-Host "Terminé. Après chaque mise à jour de Spotify, relance : spicetify backup apply" -ForegroundColor Green
