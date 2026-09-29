@@ -780,31 +780,6 @@ async function playFolder(folder) {
   await P.PlayerAPI.play({ uri: folder.uri, pages: [{ items: list.slice(0, 1000).map((uri) => ({ uri, type: "track" })) }] }, { featureIdentifier: "accueil" }, {});
 }
 
-// Saison en cours : nom calculé par l'extension (window.AccueilCore), qui crée aussi la playlist.
-function SeasonHero() {
-  const [pl, setPl] = useState(null);
-  useEffect(() => {
-    const load = () => {
-      const core = window.AccueilCore;
-      if (!core) return;
-      const name = core.currentSeason();
-      Spicetify.Platform.LibraryAPI.getContents({ filters: ["2"], flattenTree: true, limit: 400 })
-        .then((r) => setPl((r.items || []).find((i) => i.type === "playlist" && core.normName(i.name || "") === core.normName(name)) || null), () => {});
-    };
-    load();
-    window.addEventListener("accueil:season", load);
-    return () => window.removeEventListener("accueil:season", load);
-  }, []);
-  const [over, drop] = useDrop((uris) => addToPlaylist(pl, uris));
-  if (!pl) return null;
-  const img = pl.images?.[0]?.url;
-  return withMenu(pl.uri, h("div", { className: "acc-liked" + (over ? " is-drop" : ""), onClick: () => openUri(pl.uri), ...drop },
-    h("div", { className: "acc-liked-art is-season" }, img ? h("img", { src: img, alt: "" }) : null),
-    h("div", { className: "acc-liked-text" },
-      h("div", { className: "acc-liked-title" }, pl.name),
-      h("div", { className: "acc-sub" }, over ? "Lâcher pour ajouter" : "Saison en cours")),
-    h("button", { className: "acc-round", title: "Lire", onClick: (e) => { e.stopPropagation(); play(pl.uri); } }, h(PlayIcon))));
-}
 
 // ---------- plus tard ----------
 // Liste tenue par l'extension accueil-core.js (menu clic droit « Écouter plus tard »).
@@ -948,23 +923,96 @@ function usePath() {
   return path;
 }
 
-// « Your All-Time Top Songs » (playlist générée par Spotify), épinglée à côté de la saison.
+
+// ---------- épinglés ----------
+// Le haut de l'accueil affiche les éléments épinglés au clic droit (« Épingler sur l'accueil »),
+// dans l'ordre d'épinglage : rien de propre à une bibliothèque dans le code, chacun a les siens.
+// Liste tenue par l'extension accueil-core.js (au premier lancement : épingles de la bibliothèque).
+// Onglet Musique : playlists, albums, dossiers, artistes ; onglet Podcasts : épisodes, émissions.
+const PODCAST_PINS = new Set(["your-episodes", "show", "episode", "audiobook"]);
 const TOP_RE = /all[- ]time top songs|de tous les temps/i;
 
-function TopHero() {
-  const [pl, setPl] = useState(null);
+function usePins() {
+  const read = () => window.AccueilCore?.readPins?.() ?? lsGet("accueil:pins") ?? [];
+  const [uris, setUris] = useState(read);
+  const [meta, setMeta] = useState(null);
   useEffect(() => {
-    Spicetify.Platform.LibraryAPI.getContents({ filters: ["2"], flattenTree: true, limit: 400 })
-      .then((r) => setPl((r.items || []).find((i) => i.type === "playlist" && TOP_RE.test(i.name || "")) || null), () => {});
+    const refresh = () => setUris(read());
+    window.addEventListener("accueil:pins", refresh);
+    return () => window.removeEventListener("accueil:pins", refresh);
   }, []);
-  if (!pl) return null;
-  const img = pl.images?.[0]?.url;
-  return withMenu(pl.uri, h("div", { className: "acc-liked", onClick: () => openUri(pl.uri) },
-    h("div", { className: "acc-liked-art" }, img ? h("img", { src: img, alt: "" }) : null),
+  // Nom, image, type : depuis la bibliothèque, sinon via les métadonnées (élément non sauvegardé).
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const r = await Spicetify.Platform.LibraryAPI.getContents({ flattenTree: true, limit: 1000 }).catch(() => ({ items: [] }));
+      const byUri = new Map((r.items || []).map((i) => [i.uri, i]));
+      const out = {};
+      for (const uri of uris) {
+        let it = byUri.get(uri);
+        if (!it) {
+          try {
+            const d = await window.AccueilCore.describe(uri);
+            it = { uri, name: d.name, images: d.img ? [{ url: d.img }] : [], type: d.kind, owner: { name: d.sub }, artists: d.kind === "album" ? [{ name: d.sub }] : undefined };
+          } catch (e) { warn("épingle", e); continue; }
+        }
+        out[uri] = it;
+      }
+      if (alive) setMeta(out);
+    })();
+    return () => { alive = false; };
+  }, [uris.join("|")]);
+  return meta && uris.map((u) => meta[u]).filter(Boolean);
+}
+
+function pinLabel(item) {
+  const core = window.AccueilCore;
+  if (TOP_RE.test(item.name || "")) return ["All-Time Top", "Tes titres de toujours"];
+  if (core && core.normName(item.name || "") === core.normName(core.currentSeason())) return [item.name, "Saison en cours"];
+  switch (item.type) {
+    case "your-episodes": return ["Tes épisodes", "Épisodes enregistrés"];
+    case "folder": return [item.name, "Dossier"];
+    case "album": return [item.name, (item.artists || []).map((a) => a.name).join(", ") || "Album"];
+    case "artist": return [item.name, "Artiste"];
+    case "show": return [item.name, "Émission"];
+    default: return [item.name, item.isOwnedBySelf ? "Ta playlist" : item.owner?.name || "Playlist"];
+  }
+}
+
+async function playPinned(item) {
+  if (item.type !== "folder") return play(item.uri);
+  try {
+    const find = (items) => { for (const i of items) { if (i.uri === item.uri) return i; const f = i.items && find(i.items); if (f) return f; } return null; };
+    const folder = find((await Spicetify.Platform.RootlistAPI.getContents({})).items);
+    if (folder) await playFolder(folder);
+  } catch (e) { notify("Lecture impossible : " + errMsg(e), true); }
+}
+
+function PinHero({ item }) {
+  const [title, sub] = pinLabel(item);
+  const droppable = item.type === "playlist" && item.isOwnedBySelf;
+  const [over, drop] = useDrop((uris) => addToPlaylist({ uri: item.uri, name: item.name }, uris));
+  const img = item.images?.[0]?.url;
+  const isSeason = sub === "Saison en cours";
+  const open = () => (item.type === "your-episodes" ? Spicetify.Platform.History.push("/collection/your-episodes") : openUri(item.uri));
+  return withMenu(item.uri, h("div", { className: "acc-liked" + (over ? " is-drop" : ""), onClick: open, title: item.name, ...(droppable ? drop : {}) },
+    h("div", { className: "acc-liked-art" + (isSeason ? " is-season" : "") }, img ? h("img", { src: img, alt: "" }) : null),
     h("div", { className: "acc-liked-text" },
-      h("div", { className: "acc-liked-title" }, "All-Time Top"),
-      h("div", { className: "acc-sub" }, "Tes titres de toujours")),
-    h("button", { className: "acc-round", title: "Lire", onClick: (e) => { e.stopPropagation(); play(pl.uri); } }, h(PlayIcon))));
+      h("div", { className: "acc-liked-title" }, title),
+      h("div", { className: "acc-sub" }, over ? "Lâcher pour ajouter" : sub)),
+    h("button", { className: "acc-pin-x", title: "Retirer de l'accueil", onClick: (e) => { e.stopPropagation(); window.AccueilCore?.unpinUri?.(item.uri); } }, "×"),
+    h("button", { className: "acc-round", title: "Lire", onClick: (e) => { e.stopPropagation(); playPinned(item); } }, h(PlayIcon))));
+}
+
+function PinnedHeroes({ main }) {
+  const pinned = usePins();
+  const shown = (pinned || []).filter((i) => (main === "podcasts") === PODCAST_PINS.has(i.type));
+  return h("div", { className: "acc-heroes" },
+    shown.map((i) => h(PinHero, { key: i.uri, item: i })),
+    pinned && !shown.length && h("div", { className: "acc-pin-hint" }, main === "podcasts"
+      ? "Clic droit sur une émission → « Épingler sur l'accueil » pour la retrouver ici."
+      : "Clic droit sur une playlist, un album ou un artiste → « Épingler sur l'accueil » pour le retrouver ici."),
+    main === "music" && h(LikedHero));
 }
 
 function AccueilApp() {
@@ -997,7 +1045,7 @@ function AccueilApp() {
       h("nav", { className: "acc-main-tabs" },
         [["music", "Musique"], ["podcasts", "Podcasts"]].map(([id, label]) =>
           h("button", { key: id, className: "acc-main-tab" + (main === id ? " is-on" : ""), onClick: () => setMain(id) }, label))),
-      h("div", { className: "acc-heroes" }, h(TopHero), h(SeasonHero), h(LikedHero))),
+      h(PinnedHeroes, { main })),
     h("nav", { className: "acc-subnav" },
       tabs.map((t) => h("button", { key: t.id, className: "acc-chip" + (t.id === tab.id ? " is-on" : ""), onClick: () => setSub({ ...sub, [main]: t.id }) },
         t.label, t.id === "later" && later.length > 0 && h("span", { className: "acc-chip-n" }, later.length)))),
@@ -1054,6 +1102,10 @@ const CSS = `
 .acc-col-head h2 { font-size: 1.125rem; font-weight: 700; margin: 0; }
 .acc-count { color: var(--acc-sub); font-size: .8125rem; }
 .acc-col-more { margin: 10px 2px 0; }
+.acc-liked { position: relative; }
+.acc-pin-x { position: absolute; top: 4px; left: 4px; width: 22px; height: 22px; border: 0; border-radius: 50%; background: rgba(0,0,0,.75); color: #fff; font-size: .95rem; line-height: 1; cursor: pointer; opacity: 0; transition: opacity .12s; z-index: 1; }
+.acc-liked:hover .acc-pin-x, .acc-pin-x:focus-visible { opacity: 1; }
+.acc-pin-hint { display: flex; align-items: center; max-width: 320px; padding: 10px 14px; border: 1px dashed rgba(255,255,255,.2); border-radius: 8px; color: var(--acc-sub); font-size: .8125rem; }
 .acc-heroes { display: flex; gap: 12px; flex-wrap: wrap; }
 .acc-liked-art.is-season { background: linear-gradient(135deg, #b3541e, #f2c14e); overflow: hidden; }
 .acc-liked-art img { width: 100%; height: 100%; object-fit: cover; display: block; }

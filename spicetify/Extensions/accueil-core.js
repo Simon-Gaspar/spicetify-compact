@@ -8,6 +8,8 @@
 //    et range la saison précédente dans le dossier SAISONS. Une seule fois par saison.
 // 4. N'active le CSS compact du panneau (thème Compact) que si le patch 64 → 48 px est en place.
 // 6. « Écouter plus tard » et « Discographie complète » dans le menu clic droit.
+// 8. Épingles de l'accueil : playlists, albums, dossiers, artistes ou émissions affichés en haut
+//    de la page, choisis au clic droit (« Épingler sur l'accueil »).
 // 5. Vérifie les API internes de Spotify dont dépend le thème et signale celles qui manquent
 //    (elles changent parfois avec les mises à jour de Spotify).
 (function accueilCore(tries = 0) {
@@ -153,6 +155,7 @@
     try { await L.pin(current.uri); } catch {}
 
     Spicetify.LocalStorage.set(SEASON_DONE, name);
+    seasonPins(current.uri, previous.map((p) => p.uri));
     window.dispatchEvent(new Event("accueil:season"));
     const moved = previous.map((p) => p.name).join(", ");
     Spicetify.showNotification?.(`${created ? "Nouvelle saison : " + name + " créée et épinglée" : name + " épinglée"}${moved ? " · " + moved + " rangée dans SAISONS" : ""}`);
@@ -277,6 +280,8 @@
   const disc = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.25"/><circle cx="8" cy="8" r="1.75"/></svg>';
   // Enregistrées trop tôt, les entrées sont perdues (Spicetify remet en place son registre de menus
   // pendant son initialisation) : on attend que l'interface soit prête (~20 s max).
+  const PIN_TYPES = /^spotify:(playlist|album|artist|show):|:folder:/;
+  const pinIcon = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M9.5 1.75 14.25 6.5l-2 .75-2.5 2.5-.5 3.5L2.75 6.75l3.5-.5 2.5-2.5z"/><path d="M5.25 10.75 1.75 14.25"/></svg>';
   const registerMenus = (tries = 0) => {
     const ready = Spicetify.ContextMenu?.Item && typeof Spicetify.GraphQL?.Request === "function" && document.querySelector("#main-view");
     if (!ready) {
@@ -288,6 +293,10 @@
       (uris) => uris.every((u) => LATER_TYPES.test(u)) && !uris.every(inLater), clock).register();
     new Spicetify.ContextMenu.Item("Retirer de « Plus tard »", (uris) => removeLater(uris),
       (uris) => uris.every(inLater), clock).register();
+    new Spicetify.ContextMenu.Item("Épingler sur l'accueil", (uris) => pinUri(uris[0]),
+      (uris) => uris.length === 1 && PIN_TYPES.test(uris[0]) && !isPinned(uris[0]), pinIcon).register();
+    new Spicetify.ContextMenu.Item("Retirer de l'accueil", (uris) => unpinUri(uris[0]),
+      (uris) => uris.length === 1 && isPinned(uris[0]), pinIcon).register();
     new Spicetify.ContextMenu.Item("Discographie complète", (uris) => artistOf(uris[0]).then(
       (id) => id && History.push(`/accueil/discographie/${id}`), warn("discographie")),
       (uris) => uris.length === 1 && /^spotify:(artist|album|track):/.test(uris[0]), disc).register();
@@ -327,5 +336,36 @@
     return itemMenu;
   }
 
-  Object.assign(window.AccueilCore, { readLater, addLater, removeLater, inLater, findItemMenu });
+  // ---------- 8. épingles de l'accueil ----------
+  // Liste locale (accueil:pins) d'URI, dans l'ordre d'épinglage. Indépendante des épingles de la
+  // bibliothèque Spotify (limitées en nombre, et invisibles dans un dossier). Déclarations
+  // « function » : la saison (section 3) les appelle dès le démarrage.
+  function readPins() {
+    try { return JSON.parse(Spicetify.LocalStorage.get("accueil:pins") || "null"); } catch { return null; }
+  }
+  function writePins(list) {
+    Spicetify.LocalStorage.set("accueil:pins", JSON.stringify(list));
+    window.dispatchEvent(new Event("accueil:pins"));
+  }
+  // Nouvelle saison : elle prend la tête des épingles, les saisons précédentes en sortent.
+  function seasonPins(current, previous) {
+    const list = readPins();
+    if (list) writePins([current, ...list.filter((u) => u !== current && !previous.includes(u))]);
+  }
+  function pinUri(uri) {
+    const list = readPins() || [];
+    if (!list.includes(uri)) writePins([...list, uri]);
+    Spicetify.showNotification?.("Épinglé sur l'accueil");
+  }
+  function unpinUri(uri) { writePins((readPins() || []).filter((u) => u !== uri)); }
+  function isPinned(uri) { return (readPins() || []).includes(uri); }
+
+  // Premier lancement : on part des épingles de la bibliothèque Spotify.
+  if (!readPins()) {
+    Spicetify.Platform.LibraryAPI.getContents({ limit: 50 })
+      .then((r) => { if (!readPins()) writePins((r.items || []).filter((i) => i.pinned).map((i) => i.uri)); })
+      .catch(warn("épingles"));
+  }
+
+  Object.assign(window.AccueilCore, { readLater, addLater, removeLater, inLater, findItemMenu, describe, readPins, pinUri, unpinUri, isPinned });
 })();
