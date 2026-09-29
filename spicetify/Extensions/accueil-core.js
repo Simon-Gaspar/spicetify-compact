@@ -275,17 +275,25 @@
   const LATER_TYPES = /^spotify:(track|album|playlist|artist):/;
   const clock = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.25"/><path d="M8 4.5V8l2.5 1.5"/></svg>';
   const disc = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.25"/><circle cx="8" cy="8" r="1.75"/></svg>';
+  // Enregistrées trop tôt, les entrées sont perdues (Spicetify remet en place son registre de menus
+  // pendant son initialisation) : on attend que l'interface soit prête (~20 s max).
+  const registerMenus = (tries = 0) => {
+    const ready = Spicetify.ContextMenu?.Item && typeof Spicetify.GraphQL?.Request === "function" && document.querySelector("#main-view");
+    if (!ready) {
+      if (tries < 66) setTimeout(() => registerMenus(tries + 1), 300);
+      else console.warn("[accueil] Spicetify.ContextMenu introuvable : pas d'entrées clic droit");
+      return;
+    }
+    new Spicetify.ContextMenu.Item("Écouter plus tard", (uris) => addLater(uris).catch(warn("plus tard")),
+      (uris) => uris.every((u) => LATER_TYPES.test(u)) && !uris.every(inLater), clock).register();
+    new Spicetify.ContextMenu.Item("Retirer de « Plus tard »", (uris) => removeLater(uris),
+      (uris) => uris.every(inLater), clock).register();
+    new Spicetify.ContextMenu.Item("Discographie complète", (uris) => artistOf(uris[0]).then(
+      (id) => id && History.push(`/accueil/discographie/${id}`), warn("discographie")),
+      (uris) => uris.length === 1 && /^spotify:(artist|album|track):/.test(uris[0]), disc).register();
+  };
   fetch("/spicetify-routes-accueil.js")
-    .then((r) => {
-      if (!r.ok || !Spicetify.ContextMenu?.Item) return;
-      new Spicetify.ContextMenu.Item("Écouter plus tard", (uris) => addLater(uris).catch(warn("plus tard")),
-        (uris) => uris.every((u) => LATER_TYPES.test(u)) && !uris.every(inLater), clock).register();
-      new Spicetify.ContextMenu.Item("Retirer de « Plus tard »", (uris) => removeLater(uris),
-        (uris) => uris.every(inLater), clock).register();
-      new Spicetify.ContextMenu.Item("Discographie complète", (uris) => artistOf(uris[0]).then(
-        (id) => id && History.push(`/accueil/discographie/${id}`), warn("discographie")),
-        (uris) => uris.length === 1 && /^spotify:(artist|album|track):/.test(uris[0]), disc).register();
-    })
+    .then((r) => { if (r.ok) registerMenus(); })
     .catch(() => {});
 
   // ---------- 7. menus clic droit ----------
