@@ -7,7 +7,10 @@ Pour **Spotify sur ordinateur, version téléchargée sur spotify.com** (pas cel
 ## Ce que ça change
 - **Accueil sur mesure** : onglets Musique / Podcasts. Mes playlists en trois colonnes (les tiennes, celles des autres, celles de Spotify), Mes albums, Mix, Nouveautés, Découvrir. Filtres par style avec un ▶ pour lancer tout un style, nombre d'écoutes, titres likés en un clic.
 - **Glisser-déposer** : fais glisser un titre (barre du lecteur, file d'attente, activité d'écoute…) sur « Titres likés » pour le liker, sur la carte de la saison ou sur une de tes playlists pour l'y ajouter (sans doublon).
-- **Lecture plein écran** : bouton plein écran de la barre du lecteur (ou ⤢ du panneau En cours de lecture), pochette en grand et liste « À suivre ». Échap pour fermer.
+- **Lecture plein écran** : bouton plein écran de la barre du lecteur (ou ⤢ du panneau En cours de lecture), pochette en grand, paroles synchronisées et liste « À suivre ». Échap pour fermer.
+- **Écouter plus tard** : clic droit sur un titre, un album, une playlist ou un artiste → « Écouter plus tard » (ou l'horloge dans la vue Lecture) pour le mettre de côté sans le liker. Onglet « Plus tard » de l'accueil : ce qui a été joué est marqué « Écouté ». Liste gardée sur cet ordinateur uniquement.
+- **Discographie complète** : clic droit sur un artiste, un album ou un titre → « Discographie complète » : toutes les sorties de l'artiste, filtrables (albums, EP, singles, compilations, déjà dans ta bibliothèque) et triables par date.
+- **Mes albums par date de sortie** : tris « Sortie ↓ » et « Sortie ↑ » (dates lues une fois, puis gardées en cache).
 - Panneau de gauche masqué, interface épurée, bibliothèque plus dense.
 
 ## Installer
@@ -30,6 +33,7 @@ git clone https://github.com/Simon-Gaspar/spicetify-compact.git
 Installe seulement le thème et les extensions : bibliothèque compacte (si le patch de `install.sh` est en place). Sans les custom apps, le panneau de gauche et l'accueil natif restent en place.
 
 ## En cas de souci
+Spicetify rate parfois son initialisation au lancement de Spotify (écran « Something went wrong », ou accueil incomplet) : le thème recharge alors l'interface tout seul, jusqu'à 3 fois. Si ça persiste, quitte et relance Spotify.
 Si une mise à jour de Spotify casse une API interne utilisée par le thème, un bandeau le signale en haut de l'accueil (avec une notification une fois par version). Détails dans la console : `spicetify enable-devtools`, puis messages `[accueil]`.
 
 ## Désinstaller, mises à jour

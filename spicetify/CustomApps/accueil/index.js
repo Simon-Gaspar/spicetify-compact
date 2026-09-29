@@ -152,6 +152,7 @@ async function styleOf(card, idx) {
 const MUSIC_TABS = [
   { id: "playlists", label: "Mes playlists" },
   { id: "albums", label: "Mes albums" },
+  { id: "later", label: "Plus tard" },
   { id: "mix", label: "Mix pour moi", match: /^(Made [Ff]or|Your top mixes|Recommended [Ss]tations|Daily Mix)/ },
   { id: "new", label: "Nouveautés", match: /(New releases|new music|Release Radar|Nouveaut|Sorties)/i },
   { id: "discover", label: "Découvrir", match: /(More like|For fans of|Based on your|Picked for you|Recommended|Playlists de|Discover|Similar)/i },
@@ -328,6 +329,45 @@ async function fetchAlbums() {
       const artist = (i.artists || []).map((a) => a.name).join(", ");
       return { uri: i.uri, name: i.name, img: i.images?.[0]?.url || null, baseSub: artist, artist, artistUris: (i.artists || []).map((a) => a.uri), lastPlayedAt: i.lastPlayedAt || "", addedAt: i.addedAt || "" };
     });
+}
+
+// Dates de sortie : absentes de la bibliothèque, lues dans les métadonnées de chaque album
+// (spclient metadata/4), puis gardées en cache local : elles ne changent pas.
+const DATES_KEY = "accueil:albumDates";
+const albumDates = lsGet(DATES_KEY) || {};
+let datesSaveTimer;
+
+async function spMeta(kind, id) {
+  const token = Spicetify.Platform.AuthorizationAPI.getState().token.accessToken;
+  const r = await fetch(`https://spclient.wg.spotify.com/metadata/4/${kind}/${Spicetify.URI.idToHex(id)}?market=from_token`,
+    { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
+  if (!r.ok) throw new Error(`métadonnées ${kind} : HTTP ${r.status}`);
+  return r.json();
+}
+
+function useAlbumDates(albums, enabled) {
+  const [, rerender] = useState(0);
+  const [progress, setProgress] = useState(null);
+  useEffect(() => {
+    if (!enabled || !albums?.length) return;
+    const missing = albums.filter((a) => !(a.uri in albumDates));
+    if (!missing.length) return;
+    let alive = true, done = 0;
+    setProgress({ done, total: missing.length });
+    pool(missing, 6, async (a) => {
+      try {
+        const d = (await spMeta("album", a.uri.split(":")[2])).date || {};
+        albumDates[a.uri] = d.year ? `${d.year}-${String(d.month || 1).padStart(2, "0")}-${String(d.day || 1).padStart(2, "0")}` : "";
+      } catch (e) { warn("date de sortie", e); }
+      done += 1;
+      if (alive && done % 12 === 0) { setProgress({ done, total: missing.length }); rerender((x) => x + 1); }
+    }).then(() => {
+      lsSet(DATES_KEY, albumDates);
+      if (alive) { setProgress(null); rerender((x) => x + 1); }
+    });
+    return () => { alive = false; };
+  }, [albums, enabled]);
+  return progress;
 }
 
 // ---------- actions ----------
@@ -625,6 +665,8 @@ const ALBUM_SORTS = [
   { id: "added", label: "Ajoutés" },
   { id: "az", label: "A → Z" },
   { id: "artist", label: "Artiste" },
+  { id: "release", label: "Sortie ↓", title: "Date de sortie, les plus récents d'abord" },
+  { id: "release-asc", label: "Sortie ↑", title: "Date de sortie, les plus anciens d'abord" },
 ];
 
 function MyAlbums() {
@@ -633,20 +675,28 @@ function MyAlbums() {
   const [style, setStyle] = useState("all");
   const plays = usePlays();
   const { styles, progress, names } = useStyles(state.data);
+  const byRelease = sort.startsWith("release");
+  const datesProgress = useAlbumDates(state.data, byRelease);
   const sorted = useMemo(() => {
-    const list = withPlays(state.data || [], plays);
+    let list = withPlays(state.data || [], plays);
+    if (byRelease) {
+      list = list.map((a) => ({ ...a, date: albumDates[a.uri] || "", sub: (albumDates[a.uri] ? albumDates[a.uri].slice(0, 4) + " · " : "") + a.sub }));
+      const dir = sort === "release" ? -1 : 1;
+      return list.sort((a, b) => (!a.date) - (!b.date) || dir * a.date.localeCompare(b.date) || byName(a, b));
+    }
     if (sort === "top") return list.sort((a, b) => b.n - a.n || byRecent(a, b));
     if (sort === "added") return list.sort((a, b) => b.addedAt.localeCompare(a.addedAt));
     if (sort === "az") return list.sort(byName);
     if (sort === "artist") return list.sort((a, b) => a.artist.localeCompare(b.artist, "fr", { sensitivity: "base" }) || byName(a, b));
     return list.sort(byRecent);
-  }, [state.data, sort, plays]);
+  }, [state.data, sort, plays, datesProgress]);
   const shown = sorted.filter(byStyle(style, styles));
   return h(Status, { state }, () =>
     h("section", { className: "acc-section" },
       h(Toolbar, null,
         h(StyleBar, { items: sorted, styles, names, progress, value: style, onChange: setStyle }),
         h(Sorts, { options: ALBUM_SORTS, value: sort, onChange: setSort })),
+      datesProgress && h("div", { className: "acc-hint acc-note" }, `Lecture des dates de sortie… ${datesProgress.done}/${datesProgress.total} (une seule fois)`),
       h(SectionlessGrid, { key: sort + style, items: shown })));
 }
 
@@ -741,6 +791,148 @@ function SeasonHero() {
     h("button", { className: "acc-round", title: "Lire", onClick: (e) => { e.stopPropagation(); play(pl.uri); } }, h(PlayIcon)));
 }
 
+// ---------- plus tard ----------
+// Liste tenue par l'extension accueil-core.js (menu clic droit « Écouter plus tard »).
+const LATER_KINDS = [
+  { id: "all", label: "Tout" },
+  { id: "track", label: "Titres" },
+  { id: "album", label: "Albums" },
+  { id: "playlist", label: "Playlists" },
+  { id: "artist", label: "Artistes" },
+];
+
+function useLater() {
+  const read = () => window.AccueilCore?.readLater?.() || lsGet("accueil:later") || [];
+  const [list, setList] = useState(read);
+  useEffect(() => {
+    const refresh = () => setList(read());
+    window.addEventListener("accueil:later", refresh);
+    return () => window.removeEventListener("accueil:later", refresh);
+  }, []);
+  return list;
+}
+
+async function playTracks(uris) {
+  if (!uris.length) return;
+  try {
+    await Spicetify.Player.playUri(uris[0]);
+    if (uris.length > 1) await Spicetify.Platform.PlayerAPI.addToQueue(uris.slice(1).map((uri) => ({ uri })));
+  } catch (e) { notify("Lecture impossible : " + errMsg(e), true); }
+}
+
+function LaterCard({ item }) {
+  const remove = (e) => { e.stopPropagation(); window.AccueilCore?.removeLater?.([item.uri]); };
+  return h("div", { className: "acc-card" + (item.played ? " is-played" : ""), onClick: () => openUri(item.uri), title: item.name },
+    h("div", { className: "acc-cover" + (item.round ? " is-round" : "") },
+      item.img ? h("img", { src: item.img, loading: "lazy", alt: "", draggable: false }) : h("div", { className: "acc-ph" }),
+      item.played && h("span", { className: "acc-badge" }, "Écouté"),
+      h("button", { className: "acc-remove", title: "Retirer de « Plus tard »", onClick: remove }, "×"),
+      h("button", { className: "acc-play", "aria-label": "Lire " + item.name, onClick: (e) => { e.stopPropagation(); play(item.uri); } }, h(PlayIcon))),
+    h("div", { className: "acc-name" }, item.name),
+    h("div", { className: "acc-sub" }, [LATER_KINDS.find((k) => k.id === item.kind)?.label.replace(/s$/, ""), item.sub].filter(Boolean).join(" · ")));
+}
+
+function Later() {
+  const list = useLater();
+  const [kind, setKind] = useState("all");
+  const shown = list.filter((i) => kind === "all" || i.kind === kind);
+  const tracks = shown.filter((i) => i.kind === "track" && !i.played).map((i) => i.uri);
+  const played = list.filter((i) => i.played).map((i) => i.uri);
+  if (!list.length) return h("div", { className: "acc-empty" }, "Rien pour l'instant. Clic droit sur un titre, un album, une playlist ou un artiste → « Écouter plus tard ».");
+  return h("section", { className: "acc-section" },
+    h(Toolbar, null,
+      h("div", { className: "acc-styles" },
+        LATER_KINDS.map((k) => {
+          const n = k.id === "all" ? list.length : list.filter((i) => i.kind === k.id).length;
+          return n > 0 && h("button", { key: k.id, className: "acc-schip" + (kind === k.id ? " is-on" : ""), onClick: () => setKind(k.id) }, k.label, h("span", { className: "acc-chip-n" }, n));
+        })),
+      h("div", { className: "acc-sorts" },
+        tracks.length > 0 && h("button", { className: "acc-sort", onClick: () => playTracks(tracks) }, `▶ Lire les titres (${tracks.length})`),
+        played.length > 0 && h("button", { className: "acc-sort", onClick: () => window.AccueilCore?.removeLater?.(played) }, `Retirer les écoutés (${played.length})`))),
+    h("div", { className: "acc-grid" }, shown.map((i) => h(LaterCard, { key: i.uri, item: i }))));
+}
+
+// ---------- discographie ----------
+// Page /accueil/discographie/<id>, ouverte depuis le menu clic droit « Discographie complète ».
+const RELEASE_TYPES = { ALBUM: "Albums", EP: "EP", SINGLE: "Singles", COMPILATION: "Compilations" };
+const RELEASE_ONE = { ALBUM: "Album", EP: "EP", SINGLE: "Single", COMPILATION: "Compilation" };
+
+async function fetchDiscography(id) {
+  const G = Spicetify.GraphQL;
+  const uri = `spotify:artist:${id}`;
+  const releases = [];
+  for (let offset = 0; ; offset += 50) {
+    const r = await G.Request(G.Definitions.queryArtistDiscographyAll, { uri, offset, limit: 50, order: "DATE_DESC" });
+    const all = r?.data?.artistUnion?.discography?.all;
+    if (!all) throw new Error("discographie introuvable");
+    for (const it of all.items || []) {
+      const rel = it.releases?.items?.[0];
+      if (!rel) continue;
+      releases.push({
+        uri: `spotify:album:${rel.id}`,
+        name: rel.name,
+        img: pickImage(rel.coverArt?.sources),
+        type: rel.type,
+        date: rel.date?.isoString?.slice(0, 10) || String(rel.date?.year || ""),
+        tracks: rel.tracks?.totalCount || 0,
+      });
+    }
+    if (offset + 50 >= (all.totalCount || 0)) break;
+  }
+  let name = "", avatar = null;
+  try {
+    const o = await G.Request(G.Definitions.queryArtistOverview, { uri, locale: "", includePrerelease: false });
+    name = o?.data?.artistUnion?.profile?.name || "";
+    avatar = pickImage(o?.data?.artistUnion?.visuals?.avatarImage?.sources);
+  } catch (e) { warn("discographie : profil", e); }
+  let saved = [];
+  try { saved = await Spicetify.Platform.LibraryAPI.contains(...releases.map((r) => r.uri)); } catch (e) { warn("discographie : bibliothèque", e); }
+  releases.forEach((r, i) => { r.saved = !!saved[i]; });
+  return { uri, name, avatar, releases };
+}
+
+const DISCO_SORTS = [
+  { id: "new", label: "Récentes" },
+  { id: "old", label: "Anciennes" },
+  { id: "az", label: "A → Z" },
+];
+
+function Discography({ id }) {
+  const state = useAsync(() => fetchDiscography(id), [id]);
+  const [type, setType] = useState("all");
+  const [sort, setSort] = useState("new");
+  return h(Status, { state }, () => {
+    const d = state.data;
+    const count = (t) => d.releases.filter((r) => (t === "saved" ? r.saved : r.type === t)).length;
+    const keep = (r) => type === "all" || (type === "saved" ? r.saved : r.type === type);
+    const list = d.releases.filter(keep).sort((a, b) =>
+      sort === "az" ? byName(a, b) : (sort === "old" ? 1 : -1) * a.date.localeCompare(b.date));
+    const cards = list.map((r) => ({ ...r, sub: [r.date.slice(0, 4), RELEASE_ONE[r.type] || "", r.tracks ? `${r.tracks} titre${r.tracks > 1 ? "s" : ""}` : "", r.saved ? "✓ dans ta bibliothèque" : ""].filter(Boolean).join(" · ") }));
+    const chip = (t, label, n) => n > 0 && h("button", { key: t, className: "acc-schip" + (type === t ? " is-on" : ""), onClick: () => setType(t) }, label, h("span", { className: "acc-chip-n" }, n));
+    return h("section", { className: "acc-section" },
+      h("div", { className: "acc-disco-head" },
+        d.avatar && h("img", { className: "acc-disco-avatar", src: d.avatar, alt: "" }),
+        h("div", null,
+          h("div", { className: "acc-disco-kicker" }, "Discographie complète"),
+          h("h1", { className: "acc-disco-name" }, d.name || "Artiste"),
+          h("div", { className: "acc-sub" }, `${d.releases.length} sorties · `, h("a", { className: "acc-link", onClick: () => openUri(d.uri) }, "page de l'artiste")))),
+      h(Toolbar, null,
+        h("div", { className: "acc-styles" },
+          chip("all", "Tout", d.releases.length),
+          Object.entries(RELEASE_TYPES).map(([t, label]) => chip(t, label, count(t))),
+          chip("saved", "Dans ta bibliothèque", count("saved"))),
+        h(Sorts, { options: DISCO_SORTS, value: sort, onChange: setSort })),
+      h(Grid, { items: cards }));
+  });
+}
+
+function usePath() {
+  const H = Spicetify.Platform.History;
+  const [path, setPath] = useState(H.location.pathname);
+  useEffect(() => H.listen((arg) => setPath((arg?.location ?? arg).pathname)), []);
+  return path;
+}
+
 // « Your All-Time Top Songs » (playlist générée par Spotify), épinglée à côté de la saison.
 const TOP_RE = /all[- ]time top songs|de tous les temps/i;
 
@@ -766,9 +958,20 @@ function AccueilApp() {
   const tabs = main === "music" ? MUSIC_TABS : PODCAST_TABS;
   const tab = tabs.find((t) => t.id === sub[main]);
   useEffect(() => { fetchHome("music-chip").catch(() => {}); }, []);
+  const path = usePath();
+  const later = useLater();
+
+  const disco = path.match(/^\/accueil\/discographie\/([A-Za-z0-9]+)/);
+  if (disco) {
+    return h("div", { className: "acc-page" },
+      h("style", null, CSS),
+      h("button", { className: "acc-link acc-back", onClick: () => Spicetify.Platform.History.goBack() }, "← Retour"),
+      h(Discography, { key: disco[1], id: disco[1] }));
+  }
 
   let body;
   if (main === "music" && tab.id === "playlists") body = h(MyPlaylists);
+  else if (main === "music" && tab.id === "later") body = h(Later);
   else if (main === "music" && tab.id === "albums") body = h(MyAlbums);
   else body = h(HomeSections, { key: main + tab.id, facet: main === "music" ? "music-chip" : "podcasts-chip", tab, tabs });
 
@@ -781,7 +984,8 @@ function AccueilApp() {
           h("button", { key: id, className: "acc-main-tab" + (main === id ? " is-on" : ""), onClick: () => setMain(id) }, label))),
       h("div", { className: "acc-heroes" }, h(TopHero), h(SeasonHero), h(LikedHero))),
     h("nav", { className: "acc-subnav" },
-      tabs.map((t) => h("button", { key: t.id, className: "acc-chip" + (t.id === tab.id ? " is-on" : ""), onClick: () => setSub({ ...sub, [main]: t.id }) }, t.label))),
+      tabs.map((t) => h("button", { key: t.id, className: "acc-chip" + (t.id === tab.id ? " is-on" : ""), onClick: () => setSub({ ...sub, [main]: t.id }) },
+        t.label, t.id === "later" && later.length > 0 && h("span", { className: "acc-chip-n" }, later.length)))),
     body);
 }
 
@@ -866,6 +1070,16 @@ button.acc-schip { padding: 5px 12px; }
 .acc-tile-play svg { width: 14px; height: 14px; }
 .acc-tile:hover .acc-tile-play, .acc-tile-play:focus-visible { opacity: 1; transform: none; }
 .acc-tile-name { margin-top: 7px; font-size: .8125rem; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.acc-note { margin: -8px 0 16px; }
+.acc-card.is-played .acc-cover img { opacity: .55; }
+.acc-badge { position: absolute; left: 8px; top: 8px; padding: 2px 8px; border-radius: 999px; background: rgba(0,0,0,.75); color: #fff; font-size: .6875rem; font-weight: 700; }
+.acc-remove { position: absolute; right: 6px; top: 6px; width: 26px; height: 26px; border: 0; border-radius: 50%; background: rgba(0,0,0,.7); color: #fff; font-size: 1rem; line-height: 1; cursor: pointer; opacity: 0; transition: opacity .12s; }
+.acc-card:hover .acc-remove, .acc-remove:focus-visible { opacity: 1; }
+.acc-back { display: inline-block; margin-bottom: 18px; font-size: .875rem; }
+.acc-disco-head { display: flex; align-items: center; gap: 20px; margin-bottom: 24px; }
+.acc-disco-avatar { width: 112px; height: 112px; border-radius: 50%; object-fit: cover; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+.acc-disco-kicker { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--acc-sub); }
+.acc-disco-name { font-size: clamp(2rem, 4vw, 3.5rem); font-weight: 800; letter-spacing: -.02em; margin: 2px 0 6px; }
 .acc-empty { color: var(--acc-sub); padding: 40px 0; }
 .acc-liked.is-drop { background: var(--acc-chip-hover); box-shadow: inset 0 0 0 2px var(--acc-green); }
 .acc-tile.is-drop .acc-tile-img::after { content: ""; position: absolute; inset: 0; border: 3px solid var(--acc-green); border-radius: inherit; pointer-events: none; }

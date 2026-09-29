@@ -7,6 +7,7 @@
 // 3. Saisons : au début de chaque saison astronomique, crée « automne '26 » (etc.), l'épingle,
 //    et range la saison précédente dans le dossier SAISONS. Une seule fois par saison.
 // 4. N'active le CSS compact du panneau (thème Compact) que si le patch 64 → 48 px est en place.
+// 6. « Écouter plus tard » et « Discographie complète » dans le menu clic droit.
 // 5. Vérifie les API internes de Spotify dont dépend le thème et signale celles qui manquent
 //    (elles changent parfois avec les mises à jour de Spotify).
 (function accueilCore(tries = 0) {
@@ -184,6 +185,18 @@
     ["file d'attente", () => Spicetify.Queue && P().PlayerAPI.skipTo],
   ];
   setTimeout(() => {
+    // Spicetify rate parfois son initialisation (erreur dans _renderNavLinks, React pas encore prêt) :
+    // GraphQL.Request, URI et Queue ne sont alors jamais exposés, et l'erreur peut faire tomber toute
+    // l'interface (« Something went wrong », plus de #main-view). Constaté au lancement comme au
+    // rechargement, au hasard ; recharger l'interface finit par passer. Au plus 3 fois par session.
+    const reloads = +(sessionStorage.getItem("accueil:reloads") || 0);
+    const broken = typeof Spicetify.GraphQL?.Request !== "function" || !Spicetify.URI?.fromString || !document.querySelector("#main-view");
+    if (broken && reloads < 3) {
+      sessionStorage.setItem("accueil:reloads", String(reloads + 1));
+      console.warn("[accueil] initialisation de Spicetify incomplète, rechargement", reloads + 1, "/ 3");
+      location.reload();
+      return;
+    }
     const missing = missingOf(FEATURES);
     window.AccueilCore.missing = missing;
     window.dispatchEvent(new Event("accueil:health"));
@@ -194,4 +207,86 @@
     Spicetify.LocalStorage.set("accueil:health", key);
     Spicetify.showNotification?.(`Thème Compact : Spotify a changé des API internes (${missing.join(", ")})`, true);
   }, 10000);
+
+  // ---------- 6. écouter plus tard, discographie ----------
+  // Liste « plus tard » : titres, albums, playlists ou artistes mis de côté sans les liker.
+  // Stockée localement (accueil:later) ; un élément joué est marqué « écouté ».
+  const LATER = "accueil:later";
+  const readLater = () => { try { return JSON.parse(Spicetify.LocalStorage.get(LATER) || "[]"); } catch { return []; } };
+  const writeLater = (list) => {
+    Spicetify.LocalStorage.set(LATER, JSON.stringify(list));
+    window.dispatchEvent(new Event("accueil:later"));
+  };
+  const token = () => Spicetify.Platform.AuthorizationAPI.getState().token.accessToken;
+  const spMeta = async (kind, id) => {
+    const r = await fetch(`https://spclient.wg.spotify.com/metadata/4/${kind}/${Spicetify.URI.idToHex(id)}?market=from_token`,
+      { headers: { Authorization: `Bearer ${token()}`, Accept: "application/json" } });
+    if (!r.ok) throw new Error(`métadonnées ${kind} : HTTP ${r.status}`);
+    return r.json();
+  };
+  const image = (group) => {
+    const f = group?.image?.find((i) => i.size === "DEFAULT") || group?.image?.[0];
+    return f ? `https://i.scdn.co/image/${f.file_id}` : null;
+  };
+  const artistNames = (j) => (j.artist || []).map((a) => a.name).join(", ");
+
+  async function describe(uri) {
+    const [, type, id] = uri.split(":");
+    if (type === "track") { const j = await spMeta("track", id); return { name: j.name, sub: artistNames(j), img: image(j.album?.cover_group), kind: "track" }; }
+    if (type === "album") { const j = await spMeta("album", id); return { name: j.name, sub: artistNames(j), img: image(j.cover_group), kind: "album" }; }
+    if (type === "artist") { const j = await spMeta("artist", id); return { name: j.name, sub: "Artiste", img: image(j.portrait_group), kind: "artist", round: true }; }
+    if (type === "playlist") {
+      const m = await Spicetify.Platform.PlaylistAPI.getMetadata(uri);
+      return { name: m.name, sub: m.owner?.displayName || "Playlist", img: m.images?.[0]?.url || null, kind: "playlist" };
+    }
+    throw new Error("type non pris en charge");
+  }
+
+  async function addLater(uris) {
+    const list = readLater();
+    const fresh = uris.filter((u) => !list.some((i) => i.uri === u));
+    const described = await Promise.all(fresh.map((uri) => describe(uri).then((d) => ({ uri, ...d, addedAt: Date.now() }), (e) => { warn("plus tard")(e); return null; })));
+    const added = described.filter(Boolean);
+    if (added.length) writeLater([...added, ...readLater()]);
+    Spicetify.showNotification?.(added.length ? `${added.length > 1 ? added.length + " éléments ajoutés" : "Ajouté"} à « Plus tard »` : "Déjà dans « Plus tard »");
+  }
+  const removeLater = (uris) => writeLater(readLater().filter((i) => !uris.includes(i.uri)));
+  const inLater = (uri) => readLater().some((i) => i.uri === uri);
+
+  // Marque « écouté » ce qui passe en lecture (le titre, ou l'album / la playlist lancés).
+  Spicetify.Player.addEventListener("songchange", () => {
+    const d = Spicetify.Player.data;
+    const hits = [d?.item?.uri, d?.context?.uri].filter(Boolean);
+    const list = readLater();
+    if (!list.some((i) => hits.includes(i.uri) && !i.played)) return;
+    writeLater(list.map((i) => (hits.includes(i.uri) ? { ...i, played: Date.now() } : i)));
+  });
+
+  // Discographie : page /accueil/discographie/<id> de la custom app ; depuis un titre ou un album,
+  // on passe par son artiste principal.
+  async function artistOf(uri) {
+    const [, type, id] = uri.split(":");
+    if (type === "artist") return id;
+    const j = await spMeta(type, id);
+    const gid = j.artist?.[0]?.gid;
+    return gid ? Spicetify.URI.hexToId(gid) : null;
+  }
+
+  const LATER_TYPES = /^spotify:(track|album|playlist|artist):/;
+  const clock = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.25"/><path d="M8 4.5V8l2.5 1.5"/></svg>';
+  const disc = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.25"/><circle cx="8" cy="8" r="1.75"/></svg>';
+  fetch("/spicetify-routes-accueil.js")
+    .then((r) => {
+      if (!r.ok || !Spicetify.ContextMenu?.Item) return;
+      new Spicetify.ContextMenu.Item("Écouter plus tard", (uris) => addLater(uris).catch(warn("plus tard")),
+        (uris) => uris.every((u) => LATER_TYPES.test(u)) && !uris.every(inLater), clock).register();
+      new Spicetify.ContextMenu.Item("Retirer de « Plus tard »", (uris) => removeLater(uris),
+        (uris) => uris.every(inLater), clock).register();
+      new Spicetify.ContextMenu.Item("Discographie complète", (uris) => artistOf(uris[0]).then(
+        (id) => id && History.push(`/accueil/discographie/${id}`), warn("discographie")),
+        (uris) => uris.length === 1 && /^spotify:(artist|album|track):/.test(uris[0]), disc).register();
+    })
+    .catch(() => {});
+
+  Object.assign(window.AccueilCore, { readLater, addLater, removeLater, inLater });
 })();

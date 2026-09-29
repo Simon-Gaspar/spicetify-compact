@@ -39,6 +39,7 @@ function snapshot() {
     shuffle: P.getShuffle(),
     repeat: P.getRepeat(),
     heart: P.getHeart(),
+    later: !!(item && window.AccueilCore?.inLater?.(item.uri)),
     next,
   };
 }
@@ -127,6 +128,8 @@ const I = {
     h("path", { d: "M17 2l3 3-3 3M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3M20 13v2a4 4 0 0 1-4 4H4" })),
   heart: (on) => h("svg", { viewBox: "0 0 24 24", width: 22, height: 22, fill: on ? "#1ed760" : "none", stroke: on ? "#1ed760" : "currentColor", strokeWidth: 2 },
     h("path", { d: "M12 21s-7.5-4.6-9.6-9.2C.8 8.3 3 4.5 6.6 4.5c2.1 0 3.6 1.2 4.4 2.5.8-1.3 2.3-2.5 4.4-2.5 3.6 0 5.8 3.8 4.2 7.3C19.5 16.4 12 21 12 21z" })),
+  later: (on) => h("svg", { viewBox: "0 0 24 24", width: 21, height: 21, fill: "none", stroke: on ? "#1ed760" : "currentColor", strokeWidth: 2, strokeLinecap: "round" },
+    h("circle", { cx: 12, cy: 12, r: 9 }), h("path", { d: "M12 7v5l3.5 2" })),
   close: () => h("svg", { viewBox: "0 0 24 24", width: 22, height: 22, fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" }, h("path", { d: "M6 6l12 12M18 6L6 18" })),
 };
 
@@ -153,7 +156,9 @@ function Controls({ now }) {
     btn(now.playing ? "Pause" : "Lecture", now.playing ? I.pause() : I.play(), () => P.togglePlay(), "is-main"),
     btn("Suivant", I.next(), () => P.next()),
     btn(now.repeat === 2 ? "Répéter le titre" : now.repeat === 1 ? "Répéter" : "Répétition désactivée", h(React.Fragment, null, I.repeat(), now.repeat === 2 && h("span", { className: "lec-one" }, "1")), () => P.toggleRepeat(), now.repeat ? "is-on" : ""),
-    btn(now.heart ? "Retirer des titres likés" : "Ajouter aux titres likés", I.heart(now.heart), () => P.toggleHeart(), "is-heart"));
+    btn(now.heart ? "Retirer des titres likés" : "Ajouter aux titres likés", I.heart(now.heart), () => P.toggleHeart(), "is-heart"),
+    window.AccueilCore?.addLater && btn(now.later ? "Retirer de « Plus tard »" : "Écouter plus tard (sans liker)", I.later(now.later),
+      () => (now.later ? window.AccueilCore.removeLater([now.item.uri]) : window.AccueilCore.addLater([now.item.uri]))));
 }
 
 function UpNext({ now }) {
