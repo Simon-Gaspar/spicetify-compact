@@ -1276,16 +1276,20 @@ const CSS = `
 header[data-testid="topbar"] { display: none !important; }
 .acc-page { --acc-green: #1ed760; --acc-text: #fff; --acc-sub: #b3b3b3; --acc-chip: rgba(255,255,255,.07); --acc-chip-hover: rgba(255,255,255,.12);
   padding: 24px clamp(16px, 2vw, 40px) 48px; color: var(--acc-text); }
-.acc-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; margin-bottom: 20px; }
+/* Onglets à gauche, cartes épinglées à droite sur la même ligne ; les cartes rétrécissent, puis
+   passent à la ligne entre elles (toujours à droite). Sous les onglets seulement en fenêtre étroite. */
+.acc-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
+@media (max-width: 1000px) { .acc-header { flex-wrap: wrap; } .acc-heroes { justify-content: flex-start; } }
 .acc-main-tabs { display: flex; gap: 28px; }
 .acc-main-tab { background: none; border: 0; padding: 4px 0; color: var(--acc-sub); font-size: 2rem; font-weight: 700; letter-spacing: -.02em; cursor: pointer; border-bottom: 3px solid transparent; }
 .acc-main-tab:hover { color: var(--acc-text); }
 .acc-main-tab.is-on { color: var(--acc-text); border-bottom-color: var(--acc-green); }
-.acc-liked { display: flex; align-items: center; gap: 14px; padding: 8px 10px 8px 8px; min-width: 320px; border-radius: 8px; background: var(--acc-chip); cursor: pointer; }
+.acc-liked { display: flex; align-items: center; gap: 14px; padding: 8px 10px 8px 8px; flex: 0 1 300px; min-width: 220px; border-radius: 8px; background: var(--acc-chip); cursor: pointer; }
 .acc-liked:hover { background: var(--acc-chip-hover); }
 .acc-liked-art { width: 56px; height: 56px; flex: none; border-radius: 4px; display: grid; place-items: center; background: linear-gradient(135deg, #450af5, #c4efd9); }
 .acc-liked-text { flex: 1; min-width: 0; }
-.acc-liked-title { font-weight: 700; font-size: 1rem; }
+.acc-liked-title { font-weight: 700; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acc-liked-text .acc-sub { -webkit-line-clamp: 1; }
 .acc-round { width: 44px; height: 44px; flex: none; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--acc-green); color: #000; cursor: pointer; transition: transform .1s; }
 .acc-round:hover { transform: scale(1.06); }
 .acc-round.is-ghost { background: transparent; color: var(--acc-sub); }
@@ -1336,7 +1340,7 @@ header[data-testid="topbar"] { display: none !important; }
 .acc-tidy-name:hover { text-decoration: underline; }
 .acc-tidy-note { margin-top: 14px; }
 .acc-pin-hint { display: flex; align-items: center; max-width: 320px; padding: 10px 14px; border: 1px dashed rgba(255,255,255,.2); border-radius: 8px; color: var(--acc-sub); font-size: .8125rem; }
-.acc-heroes { display: flex; gap: 12px; flex-wrap: wrap; }
+.acc-heroes { display: flex; gap: 12px; flex-wrap: wrap; justify-content: flex-end; flex: 1 1 auto; min-width: 0; }
 .acc-liked-art.is-season { background: linear-gradient(135deg, #b3541e, #f2c14e); overflow: hidden; }
 .acc-liked-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .acc-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; margin-bottom: 18px; }
