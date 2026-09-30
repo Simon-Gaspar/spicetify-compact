@@ -270,9 +270,19 @@
   async function artistOf(uri) {
     const [, type, id] = uri.split(":");
     if (type === "artist") return id;
+    // GraphQL d'abord (getTrack / getAlbum), métadonnées spclient en secours.
+    try {
+      const G = Spicetify.GraphQL;
+      const r = type === "track"
+        ? await G.Request(G.Definitions.getTrack, { uri })
+        : await G.Request(G.Definitions.getAlbum, { uri, locale: "", offset: 0, limit: 1 });
+      const a = type === "track" ? r?.data?.trackUnion?.firstArtist?.items?.[0]?.uri : r?.data?.albumUnion?.artists?.items?.[0]?.uri;
+      if (a) return a.split(":")[2];
+    } catch (e) { warn("discographie : artiste (GraphQL)")(e); }
     const j = await spMeta(type, id);
     const gid = j.artist?.[0]?.gid;
-    return gid ? Spicetify.URI.hexToId(gid) : null;
+    if (!gid) throw new Error("artiste introuvable");
+    return Spicetify.URI.hexToId(gid);
   }
 
   const LATER_TYPES = /^spotify:(track|album|playlist|artist):/;
@@ -298,7 +308,8 @@
     new Spicetify.ContextMenu.Item("Retirer de l'accueil", (uris) => unpinUri(uris[0]),
       (uris) => uris.length === 1 && isPinned(uris[0]), pinIcon).register();
     new Spicetify.ContextMenu.Item("Discographie complète", (uris) => artistOf(uris[0]).then(
-      (id) => id && History.push(`/accueil/discographie/${id}`), warn("discographie")),
+      (id) => History.push(`/accueil/discographie/${id}`),
+      (e) => { warn("discographie")(e); Spicetify.showNotification?.(`Discographie indisponible : ${e?.message || e}`, true); }),
       (uris) => uris.length === 1 && /^spotify:(artist|album|track):/.test(uris[0]), disc).register();
   };
   fetch("/spicetify-routes-accueil.js")

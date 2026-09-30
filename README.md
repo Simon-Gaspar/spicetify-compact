@@ -9,7 +9,7 @@ Pour **Spotify sur ordinateur, version téléchargée sur spotify.com** (pas cel
 ## Ce que ça change
 
 ### Accueil
-- **Onglets Musique / Podcasts**, avec un sous-menu chacun : Mes playlists, Mes albums, Plus tard, Mix pour moi, Nouveautés, Découvrir (et pour les podcasts : nouveaux épisodes, à reprendre, tes émissions, découvrir).
+- **Onglets Musique / Podcasts / Livres audio**, avec un sous-menu chacun : Mes playlists, Mes albums, Plus tard, Mix pour moi, Nouveautés, Découvrir ; pour les podcasts : nouveaux épisodes, à reprendre, tes émissions, découvrir ; pour les livres audio : les tiens et ceux proposés pour toi. Fonctionne avec Spotify en français comme en anglais (une section non reconnue va dans « Découvrir » plutôt que de disparaître).
 - **Mes playlists en trois colonnes** : les tiennes, celles des autres, celles de Spotify.
 - **Filtres par style** dans chaque sous-menu, avec un ▶ pour lancer tout un style en aléatoire. Les styles viennent de tes dossiers (voir [À adapter](#à-adapter-à-ta-bibliothèque)).
 - **Nombre d'écoutes** sur chaque playlist et chaque album, et tri « Plus écoutées ».
@@ -33,7 +33,7 @@ Fais glisser un titre (barre du lecteur, file d'attente…) sur « Titres likés
 - **Démarrage** : si Spicetify rate son initialisation (ça arrive au lancement de Spotify), l'interface se recharge toute seule.
 
 ### Interface
-Panneau de gauche masqué (la navigation passe par l'accueil), bouton « Studio » retiré, bouton Maison en double retiré.
+Panneau de gauche masqué (la navigation passe par l'accueil), bouton « Studio » retiré, bouton Maison en double retiré, bande colorée de l'en-tête retirée sur l'accueil.
 
 ## Installer
 
@@ -63,7 +63,7 @@ Revenir au Spotify d'origine : `spicetify restore`.
 
 ## À adapter à ta bibliothèque
 
-- **Styles** : un style = un dossier de premier niveau de ta bibliothèque, détecté automatiquement (sauf `SAISONS`). Les albums, mix et découvertes sont classés d'après leurs artistes, et ce qui ne rentre dans aucun style va dans « Mixte ». Pour ne garder que certains dossiers ou changer leur nom affiché, édite `STYLE_LABELS` au début de `CustomApps/accueil/index.js` (dans `%APPDATA%\spicetify` sous Windows, `~/.config/spicetify` sur Mac), puis `spicetify apply` : dès qu'un dossier de cette liste existe, seuls ceux de la liste comptent. L'analyse est refaite chaque semaine.
+- **Styles** : sans dossiers, pas de filtres par style (une astuce le rappelle) — tout le reste fonctionne. Un style = un dossier de premier niveau de ta bibliothèque, détecté automatiquement (sauf `SAISONS`). Les albums, mix et découvertes sont classés d'après leurs artistes, et ce qui ne rentre dans aucun style va dans « Mixte ». Pour ne garder que certains dossiers ou changer leur nom affiché, édite `STYLE_LABELS` au début de `CustomApps/accueil/index.js` (dans `%APPDATA%\spicetify` sous Windows, `~/.config/spicetify` sur Mac), puis `spicetify apply` : dès qu'un dossier de cette liste existe, seuls ceux de la liste comptent. L'analyse est refaite chaque semaine.
 - **Saisons automatiques** : ne s'activent que si tu as un dossier `SAISONS` à la racine de ta bibliothèque. Sans ce dossier, rien n'est créé.
 - **Épingles** : au premier lancement, elles reprennent les éléments épinglés de ta bibliothèque Spotify, puis c'est toi qui choisis.
 

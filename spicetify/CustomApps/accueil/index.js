@@ -148,20 +148,28 @@ async function styleOf(card, idx) {
   return style;
 }
 
-// Sections de l'accueil Spotify → sous-menus. L'ordre compte : première règle qui matche.
+// Sections de l'accueil Spotify → sous-menus, d'après leur titre, qui dépend de la langue de Spotify
+// (règles en anglais et en français). L'ordre compte : première règle qui matche. Un onglet
+// « fallback » récupère les sections qu'aucune règle ne reconnaît (autre langue, nouveau type de
+// section), sauf celles de SKIP_SECTIONS : rien ne disparaît.
+const SKIP_SECTIONS = /^(Recents|Récents|Récemment|Jump back in|Reprends|Shorts)|Vid[ée]os?\b|HomeShorts/i;
 const MUSIC_TABS = [
   { id: "playlists", label: "Mes playlists" },
   { id: "albums", label: "Mes albums" },
   { id: "later", label: "Plus tard" },
-  { id: "mix", label: "Mix pour moi", match: /^(Made [Ff]or|Your top mixes|Recommended [Ss]tations|Daily Mix)/ },
-  { id: "new", label: "Nouveautés", match: /(New releases|new music|Release Radar|Nouveaut|Sorties)/i },
-  { id: "discover", label: "Découvrir", match: /(More like|For fans of|Based on your|Picked for you|Recommended|Playlists de|Discover|Similar)/i },
+  { id: "mix", label: "Mix pour moi", match: /^(Made [Ff]or|Your top mixes|Recommended [Ss]tations|Daily Mix|Conçu pour|Créé pour|Tes mix|Vos mix|Mix préférés|Radios? recommandées)/i },
+  { id: "new", label: "Nouveautés", match: /(New releases|new music|Release Radar|Nouveaut|Sorties|Radar des sorties)/i },
+  { id: "discover", label: "Découvrir", fallback: true, match: /(More like|For fans of|Based on your|Picked for you|Recommended|Playlists de|Discover|Similar|Plus du genre|Dans le style|Pour les fans|Sur la base|Choisi pour|Recommandé|Découv|Similaire)/i },
 ];
 const PODCAST_TABS = [
-  { id: "episodes", label: "Nouveaux épisodes", match: /^New episode/i, merge: "Derniers épisodes de tes émissions" },
-  { id: "resume", label: "Reprendre", match: /^Catch up/i, merge: "À reprendre" },
-  { id: "shows", label: "Mes podcasts", match: /^Your shows/i },
-  { id: "discover", label: "Découvrir", match: /(might like|Similar to|Popular with)/i, exclude: /Video/i },
+  { id: "episodes", label: "Nouveaux épisodes", match: /^(New episode|Nouvel épisode|Nouveaux épisodes)/i, merge: "Derniers épisodes de tes émissions" },
+  { id: "resume", label: "Reprendre", match: /^(Catch up|Remettez-vous à jour|Rattrape|À rattraper|Reprendre)/i, merge: "À reprendre" },
+  { id: "shows", label: "Mes podcasts", match: /^(Your shows|Vos émissions|Tes émissions)/i },
+  { id: "discover", label: "Découvrir", fallback: true, match: /(might like|Similar to|Popular with|pourriez aimer|pourraient vous plaire|pourrait te plaire|Similaire à|Populaire chez)/i },
+];
+const AUDIOBOOK_TABS = [
+  { id: "mine", label: "Mes livres audio" },
+  { id: "discover", label: "Pour toi", fallback: true, match: /(Audiobooks for you|Livres audio pour|Popular with|Populaire chez|Based on your|Sur la base|interest in|intérêt)/i },
 ];
 
 const TITLES = [
@@ -236,6 +244,8 @@ function toCard(data) {
     }
     case "Podcast":
       return { uri: data.uri, name: data.name, img, sub: data.publisher?.name || "Podcast" };
+    case "Audiobook":
+      return { uri: data.uri, name: data.name, img, sub: (data.authorsV2 || data.authors || []).map((a) => a.name).filter(Boolean).join(", ") || "Livre audio" };
     default:
       return null;
   }
@@ -271,7 +281,10 @@ async function requestHome(facet) {
 
 // Regroupe les sections d'un sous-menu : fusionne les titres identiques, dédoublonne les éléments.
 function sectionsFor(tab, allTabs, sections) {
-  const owner = (title) => allTabs.find((t) => t.match && t.match.test(title) && !(t.exclude && t.exclude.test(title)));
+  const owner = (title) => {
+    if (SKIP_SECTIONS.test(title)) return null;
+    return allTabs.find((t) => t.match && t.match.test(title)) || allTabs.find((t) => t.fallback) || null;
+  };
   const mine = sections.filter((s) => owner(s.title) === tab);
   const groups = new Map();
   for (const s of mine) {
@@ -588,7 +601,9 @@ function StyleBar({ items, styles, names, progress, value, onChange }) {
     if (st) counts[st] = (counts[st] || 0) + 1;
   }
   const options = [...names, MIXED].filter((st) => counts[st]);
-  if (!names.length || !options.length) return null; // aucun dossier de style dans la bibliothèque
+  // Aucun dossier de style dans la bibliothèque : on explique comment en avoir.
+  if (!names.length) return h("div", { className: "acc-hint" }, "Astuce : range tes playlists dans des dossiers (Électro, Rap, Jazz…) pour filtrer et lancer par style.");
+  if (!options.length) return null;
   const launch = async (st) => {
     setBusy(st);
     try { await playFolder(folders[st]); } catch (e) { Spicetify.showNotification?.("Lecture impossible : " + (e?.message || e), true); }
@@ -929,7 +944,8 @@ function usePath() {
 // dans l'ordre d'épinglage : rien de propre à une bibliothèque dans le code, chacun a les siens.
 // Liste tenue par l'extension accueil-core.js (au premier lancement : épingles de la bibliothèque).
 // Onglet Musique : playlists, albums, dossiers, artistes ; onglet Podcasts : épisodes, émissions.
-const PODCAST_PINS = new Set(["your-episodes", "show", "episode", "audiobook"]);
+const PIN_GROUPS = { "your-episodes": "podcasts", show: "podcasts", episode: "podcasts", audiobook: "audiobooks" };
+const pinGroup = (item) => PIN_GROUPS[item.type] || "music";
 const TOP_RE = /all[- ]time top songs|de tous les temps/i;
 
 function usePins() {
@@ -1006,19 +1022,42 @@ function PinHero({ item }) {
 
 function PinnedHeroes({ main }) {
   const pinned = usePins();
-  const shown = (pinned || []).filter((i) => (main === "podcasts") === PODCAST_PINS.has(i.type));
+  const shown = (pinned || []).filter((i) => pinGroup(i) === main);
   return h("div", { className: "acc-heroes" },
     shown.map((i) => h(PinHero, { key: i.uri, item: i })),
-    pinned && !shown.length && h("div", { className: "acc-pin-hint" }, main === "podcasts"
-      ? "Clic droit sur une émission → « Épingler sur l'accueil » pour la retrouver ici."
-      : "Clic droit sur une playlist, un album ou un artiste → « Épingler sur l'accueil » pour le retrouver ici."),
+    pinned && !shown.length && h("div", { className: "acc-pin-hint" }, {
+      podcasts: "Clic droit sur une émission → « Épingler sur l'accueil » pour la retrouver ici.",
+      audiobooks: "Clic droit sur un livre audio → « Épingler sur l'accueil » pour le retrouver ici.",
+    }[main] || "Clic droit sur une playlist, un album ou un artiste → « Épingler sur l'accueil » pour le retrouver ici."),
     main === "music" && h(LikedHero));
 }
 
+async function fetchAudiobooks() {
+  const r = await Spicetify.Platform.LibraryAPI.getContents({ filters: ["4"], limit: 200 });
+  return (r.items || []).filter((i) => i.type === "audiobook").map((i) => ({
+    uri: i.uri, name: i.name, img: i.images?.[0]?.url || null,
+    sub: (i.authors || []).map((a) => a.name).join(", ") || "Livre audio",
+  }));
+}
+
+function MyAudiobooks() {
+  const state = useAsync(fetchAudiobooks, []);
+  return h(Status, { state }, () => state.data.length
+    ? h("section", { className: "acc-section" }, h(Grid, { items: state.data }))
+    : h("div", { className: "acc-empty" }, "Aucun livre audio dans ta bibliothèque. Regarde « Pour toi », ou ajoute-en depuis la recherche."));
+}
+
+const MAIN_TABS = [
+  { id: "music", label: "Musique", tabs: MUSIC_TABS, facet: "music-chip" },
+  { id: "podcasts", label: "Podcasts", tabs: PODCAST_TABS, facet: "podcasts-chip" },
+  { id: "audiobooks", label: "Livres audio", tabs: AUDIOBOOK_TABS, facet: "audiobooks-chip" },
+];
+
 function AccueilApp() {
   const [main, setMain] = useState("music");
-  const [sub, setSub] = useState({ music: "playlists", podcasts: "episodes" });
-  const tabs = main === "music" ? MUSIC_TABS : PODCAST_TABS;
+  const [sub, setSub] = useState({ music: "playlists", podcasts: "episodes", audiobooks: "mine" });
+  const mainTab = MAIN_TABS.find((m) => m.id === main);
+  const tabs = mainTab.tabs;
   const tab = tabs.find((t) => t.id === sub[main]);
   useEffect(() => { fetchHome("music-chip").catch(() => {}); }, []);
   const path = usePath();
@@ -1036,15 +1075,16 @@ function AccueilApp() {
   if (main === "music" && tab.id === "playlists") body = h(MyPlaylists);
   else if (main === "music" && tab.id === "later") body = h(Later);
   else if (main === "music" && tab.id === "albums") body = h(MyAlbums);
-  else body = h(HomeSections, { key: main + tab.id, facet: main === "music" ? "music-chip" : "podcasts-chip", tab, tabs });
+  else if (main === "audiobooks" && tab.id === "mine") body = h(MyAudiobooks);
+  else body = h(HomeSections, { key: main + tab.id, facet: mainTab.facet, tab, tabs });
 
   return h("div", { className: "acc-page" },
     h("style", null, CSS),
     h(HealthBanner),
     h("header", { className: "acc-header" },
       h("nav", { className: "acc-main-tabs" },
-        [["music", "Musique"], ["podcasts", "Podcasts"]].map(([id, label]) =>
-          h("button", { key: id, className: "acc-main-tab" + (main === id ? " is-on" : ""), onClick: () => setMain(id) }, label))),
+        MAIN_TABS.map((m) =>
+          h("button", { key: m.id, className: "acc-main-tab" + (main === m.id ? " is-on" : ""), onClick: () => setMain(m.id) }, m.label))),
       h(PinnedHeroes, { main })),
     h("nav", { className: "acc-subnav" },
       tabs.map((t) => h("button", { key: t.id, className: "acc-chip" + (t.id === tab.id ? " is-on" : ""), onClick: () => setSub({ ...sub, [main]: t.id }) },
@@ -1057,6 +1097,9 @@ function render() {
 }
 
 const CSS = `
+/* En-tête collant de Spotify (bande colorée qui apparaît au défilement, vide sur cette page) :
+   masqué tant que l'accueil est affiché — ce CSS disparaît avec la page. */
+header[data-testid="topbar"] { display: none !important; }
 .acc-page { --acc-green: #1ed760; --acc-text: #fff; --acc-sub: #b3b3b3; --acc-chip: rgba(255,255,255,.07); --acc-chip-hover: rgba(255,255,255,.12);
   padding: 24px clamp(16px, 2vw, 40px) 48px; color: var(--acc-text); }
 .acc-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; margin-bottom: 20px; }
