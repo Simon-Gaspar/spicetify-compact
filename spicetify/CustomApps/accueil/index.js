@@ -663,10 +663,179 @@ function Column({ id, label, items }) {
     items.length > n && h("button", { className: "acc-link acc-col-more", onClick: () => setN(n + 120) }, `Afficher plus (${items.length - n})`));
 }
 
+// ---------- suggestions de rangement ----------
+// Trois cas, chacun avec une action d'un clic et « Ignorer » :
+// - playlist d'un dossier de style dont les artistes relèvent surtout d'un autre style ;
+// - playlist en vrac à la racine dont le style est net (hors épinglées et saisons) ;
+// - playlist pas écoutée depuis plus d'un an (quand Spotify connaît la date), à archiver.
+// Le style d'un artiste est compté sans la playlist examinée : sinon un artiste présent seulement
+// là « voterait » toujours pour son dossier actuel. Résultat gardé une semaine (accueil:tidy).
+const TIDY_KEY = "accueil:tidy";
+const TIDY_IGNORED = "accueil:tidy-ignored";
+const TIDY_TTL = 7 * 86400000;
+const ARCHIVE_FOLDER = "ARCHIVES";
+const SEASON_NAME = /^(hiver|printemps|été|automne)\s*['‘’`´]\s*\d{2}$/i;
+
+async function analyzeLibrary(onProgress) {
+  const P = Spicetify.Platform;
+  const tree = await P.RootlistAPI.getContents({});
+  const folders = styleFoldersOf(tree);
+  const where = {};
+  const walk = (items, label) => {
+    for (const i of items) {
+      if (i.type === "folder") walk(i.items || [], label);
+      else if (i.type === "playlist") where[i.uri] = { label, name: i.name };
+    }
+  };
+  for (const { label, folder } of folders) walk(folder.items || [], label);
+
+  const pins = new Set(window.AccueilCore?.readPins?.() || []);
+  const loose = tree.items.filter((i) => i.type === "playlist" && !pins.has(i.uri) && !SEASON_NAME.test((i.name || "").trim()));
+  const uris = [...Object.keys(where), ...loose.map((i) => i.uri)];
+  const artistsOf = {};
+  let done = 0;
+  onProgress?.({ done, total: uris.length });
+  await pool(uris, 6, async (uri) => {
+    try { artistsOf[uri] = [...new Set(await trackArtists(uri, 150))]; } catch { artistsOf[uri] = []; }
+    done += 1;
+    if (done % 10 === 0) onProgress?.({ done, total: uris.length });
+  });
+
+  const votes = {};
+  for (const [uri, { label }] of Object.entries(where)) for (const a of artistsOf[uri]) { const v = (votes[a] ||= {}); v[label] = (v[label] || 0) + 1; }
+  const judge = (uri, own) => {
+    const tally = {};
+    let known = 0;
+    for (const a of artistsOf[uri]) {
+      const v = { ...(votes[a] || {}) };
+      if (own) v[own] = (v[own] || 0) - 1;
+      const best = Object.entries(v).filter(([, n]) => n > 0).sort((x, y) => y[1] - x[1])[0];
+      if (!best) continue;
+      known += 1;
+      tally[best[0]] = (tally[best[0]] || 0) + 1;
+    }
+    const [top, n] = Object.entries(tally).sort((x, y) => y[1] - x[1])[0] || [];
+    const total = artistsOf[uri].length;
+    return { top, share: known ? n / known : 0, ownShare: own && known ? (tally[own] || 0) / known : 0, known, total, reliable: known >= 8 && known / (total || 1) >= 0.25 };
+  };
+
+  const folderOf = Object.fromEntries(folders.map((f) => [f.label, f.folder.uri]));
+  const misplaced = [];
+  for (const [uri, { label, name }] of Object.entries(where)) {
+    const j = judge(uri, label);
+    if (j.reliable && j.top !== label && j.share >= 0.6 && j.ownShare < 0.25)
+      misplaced.push({ uri, name, from: label, to: j.top, toFolder: folderOf[j.top], share: j.share, known: j.known, total: j.total });
+  }
+  const toFile = [];
+  for (const i of loose) {
+    const j = judge(i.uri, null);
+    if (j.reliable && j.share >= 0.6) toFile.push({ uri: i.uri, name: i.name, to: j.top, toFolder: folderOf[j.top], share: j.share, known: j.known, total: j.total });
+  }
+
+  const lib = await P.LibraryAPI.getContents({ filters: ["2"], flattenTree: true, limit: 1000 });
+  const skip = new Set();
+  (function mark(items, inside) {
+    for (const i of items) {
+      const archival = inside || (i.type === "folder" && (i.name === "SAISONS" || i.name === ARCHIVE_FOLDER));
+      if (i.type === "playlist" && archival) skip.add(i.uri);
+      if (i.items) mark(i.items, archival);
+    }
+  })(tree.items, false);
+  const yearAgo = Date.now() - 365 * 86400000;
+  const playlists = (lib.items || []).filter((i) => i.type === "playlist");
+  const dormant = playlists
+    .filter((i) => i.lastPlayedAt && Date.parse(i.lastPlayedAt) < yearAgo && !skip.has(i.uri) && !pins.has(i.uri))
+    .map((i) => ({ uri: i.uri, name: i.name, last: i.lastPlayedAt }));
+  const images = Object.fromEntries(playlists.map((i) => [i.uri, i.images?.[0]?.url || null]));
+  for (const list of [misplaced, toFile, dormant]) for (const x of list) x.img = images[x.uri] || null;
+  return {
+    misplaced: misplaced.sort((a, b) => b.share - a.share),
+    toFile,
+    dormant,
+    undated: playlists.filter((i) => !i.lastPlayedAt).length,
+  };
+}
+
+// Mise à jour de l'index des styles après un déplacement (sinon il attendrait sa reconstruction hebdo).
+function restyle(uri, label) {
+  const idx = lsGet(STYLE_KEY);
+  if (!idx?.playlists) return;
+  if (label) idx.playlists[uri] = label; else delete idx.playlists[uri];
+  lsSet(STYLE_KEY, idx);
+  styleIndexPromise = null;
+}
+
+async function moveToFolder(uri, folderUri) {
+  await Spicetify.Platform.RootlistAPI.move([{ uri }], { after: { uri: folderUri } });
+}
+
+async function archiveFolderUri() {
+  const R = Spicetify.Platform.RootlistAPI;
+  const find = async () => (await R.getContents({})).items.find((i) => i.type === "folder" && i.name === ARCHIVE_FOLDER)?.uri;
+  return (await find()) || (await R.createFolder(ARCHIVE_FOLDER, { after: "end" })).uri || (await find());
+}
+
+function TidyPanel({ onClose }) {
+  const [data, setData] = useState(() => {
+    const c = lsGet(TIDY_KEY);
+    return c && Date.now() - c.at < TIDY_TTL ? c.data : null;
+  });
+  const [progress, setProgress] = useState(null);
+  const [error, setError] = useState(null);
+  const [ignored, setIgnored] = useState(() => new Set(lsGet(TIDY_IGNORED) || []));
+  const [done, setDone] = useState(() => new Set());
+  const run = () => {
+    setError(null);
+    setProgress({ done: 0, total: 0 });
+    analyzeLibrary(setProgress).then((d) => { lsSet(TIDY_KEY, { at: Date.now(), data: d }); setData(d); setProgress(null); },
+      (e) => { setError(errMsg(e)); setProgress(null); });
+  };
+  useEffect(() => { if (!data) run(); }, []);
+  const ignore = (uri) => { const next = new Set(ignored).add(uri); setIgnored(next); lsSet(TIDY_IGNORED, [...next]); };
+  const act = async (item, fn, msg) => {
+    try { await fn(); setDone(new Set(done).add(item.uri)); notify(msg); } catch (e) { notify("Rangement impossible : " + errMsg(e), true); }
+  };
+  const visible = (list) => (list || []).filter((x) => !ignored.has(x.uri) && !done.has(x.uri));
+  const pct = (x) => `${Math.round(x.share * 100)} %`;
+
+  const row = (x, reason, action) => h("div", { key: x.uri, className: "acc-tidy-row" },
+    h("div", { className: "acc-tidy-img", onClick: () => openUri(x.uri) }, x.img && h("img", { src: x.img, alt: "" })),
+    h("div", { className: "acc-tidy-text" },
+      h("a", { className: "acc-tidy-name", onClick: () => openUri(x.uri) }, x.name),
+      h("div", { className: "acc-sub" }, reason)),
+    action,
+    h("button", { className: "acc-sort", onClick: () => ignore(x.uri) }, "Ignorer"));
+  const move = (x, label) => x.toFolder && h("button", { className: "acc-chip is-small", onClick: () => act(x, async () => { await moveToFolder(x.uri, x.toFolder); restyle(x.uri, x.to); }, `« ${x.name} » rangée dans ${label}`) }, `Déplacer vers ${label}`);
+  const group = (title, items, render) => items.length > 0 && h("div", { className: "acc-tidy-group" }, h("h3", null, `${title} · ${items.length}`), items.map(render));
+
+  let body;
+  if (error) body = h("div", { className: "acc-sub" }, "Analyse impossible : " + error);
+  else if (progress) body = h("div", { className: "acc-hint" }, `Analyse de ta bibliothèque… ${progress.done}/${progress.total || "…"} playlists`);
+  else if (data) {
+    const misplaced = visible(data.misplaced), toFile = visible(data.toFile), dormant = visible(data.dormant);
+    body = h(React.Fragment, null,
+      !misplaced.length && !toFile.length && !dormant.length && h("div", { className: "acc-sub" }, "Rien à ranger : ta bibliothèque est en ordre."),
+      group("Mal rangées", misplaced, (x) => row(x, `Rangée dans ${x.from}, mais ${pct(x)} de ses artistes (${x.known} reconnus sur ${x.total}) relèvent de ${x.to}`, move(x, x.to))),
+      group("En vrac", toFile, (x) => row(x, `À la racine ; ${pct(x)} de ses artistes (${x.known} reconnus sur ${x.total}) relèvent de ${x.to}`, move(x, x.to))),
+      group("Pas écoutées depuis plus d'un an", dormant, (x) => row(x, `Dernière écoute : ${new Date(x.last).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}`,
+        h("button", { className: "acc-chip is-small", onClick: () => act(x, async () => { await moveToFolder(x.uri, await archiveFolderUri()); restyle(x.uri, null); }, `« ${x.name} » archivée dans ${ARCHIVE_FOLDER}`) }, "Archiver"))),
+      data.undated > 0 && h("div", { className: "acc-hint acc-tidy-note" }, `Spotify ne garde pas de date d'écoute pour ${data.undated} playlist${data.undated > 1 ? "s" : ""} : celles qui dorment ne peuvent pas toutes être repérées.`));
+  }
+
+  return h("div", { className: "acc-tidy" },
+    h("div", { className: "acc-tidy-head" },
+      h("h2", null, "Suggestions de rangement"),
+      h("div", { className: "acc-sorts" },
+        !progress && h("button", { className: "acc-sort", onClick: run }, "Actualiser"),
+        h("button", { className: "acc-sort", onClick: onClose }, "Fermer"))),
+    body);
+}
+
 function MyPlaylists() {
   const state = useAsync(fetchPlaylists, []);
   const [sort, setSort] = useState("top");
   const [style, setStyle] = useState("all");
+  const [tidy, setTidy] = useState(false);
   const plays = usePlays();
   const { styles, progress, names } = useStyles(state.data);
   const sorted = useMemo(() => {
@@ -683,7 +852,10 @@ function MyPlaylists() {
     h("section", { className: "acc-section" },
       h(Toolbar, null,
         h(StyleBar, { items: sorted, styles, names, progress, value: style, onChange: setStyle }),
-        h(Sorts, { options: sorts, value: sort, onChange: setSort })),
+        h("div", { className: "acc-sorts" },
+          h(Sorts, { options: sorts, value: sort, onChange: setSort }),
+          h("button", { className: "acc-sort" + (tidy ? " is-on" : ""), title: "Playlists mal rangées, en vrac ou en sommeil", onClick: () => setTidy(!tidy) }, "Ranger"))),
+      tidy && h(TidyPanel, { onClose: () => setTidy(false) }),
       h("div", { className: "acc-cols" },
         COLUMNS.map((c) => h(Column, { key: c.id + sort + style, id: c.id, label: c.label, items: shown.filter((p) => p.group === c.id) })))));
 }
@@ -1150,6 +1322,19 @@ header[data-testid="topbar"] { display: none !important; }
 .acc-liked { position: relative; }
 .acc-pin-x { position: absolute; top: 4px; left: 4px; width: 22px; height: 22px; border: 0; border-radius: 50%; background: rgba(0,0,0,.75); color: #fff; font-size: .95rem; line-height: 1; cursor: pointer; opacity: 0; transition: opacity .12s; z-index: 1; }
 .acc-liked:hover .acc-pin-x, .acc-pin-x:focus-visible { opacity: 1; }
+.acc-tidy { margin: 0 0 28px; padding: 18px 20px; border-radius: 10px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); }
+.acc-tidy-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.acc-tidy-head h2 { font-size: 1.125rem; font-weight: 700; margin: 0; }
+.acc-tidy-group { margin-top: 14px; }
+.acc-tidy-group h3 { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--acc-sub); margin: 0 0 6px; }
+.acc-tidy-row { display: flex; align-items: center; gap: 12px; padding: 6px 8px; border-radius: 6px; }
+.acc-tidy-row:hover { background: var(--acc-chip); }
+.acc-tidy-img { width: 40px; height: 40px; flex: none; border-radius: 4px; overflow: hidden; background: #282828; cursor: pointer; }
+.acc-tidy-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.acc-tidy-text { flex: 1; min-width: 0; }
+.acc-tidy-name { font-weight: 600; cursor: pointer; color: inherit; }
+.acc-tidy-name:hover { text-decoration: underline; }
+.acc-tidy-note { margin-top: 14px; }
 .acc-pin-hint { display: flex; align-items: center; max-width: 320px; padding: 10px 14px; border: 1px dashed rgba(255,255,255,.2); border-radius: 8px; color: var(--acc-sub); font-size: .8125rem; }
 .acc-heroes { display: flex; gap: 12px; flex-wrap: wrap; }
 .acc-liked-art.is-season { background: linear-gradient(135deg, #b3541e, #f2c14e); overflow: hidden; }

@@ -13,6 +13,7 @@ Pour **Spotify sur ordinateur, version téléchargée sur spotify.com** (pas cel
 - **Mes playlists en trois colonnes** : les tiennes, celles des autres, celles de Spotify.
 - **Filtres par style** dans chaque sous-menu, avec un ▶ pour lancer tout un style en aléatoire. Les styles viennent de tes dossiers (voir [À adapter](#à-adapter-à-ta-bibliothèque)).
 - **Nombre d'écoutes** sur chaque playlist et chaque album, et tri « Plus écoutées ».
+- **Suggestions de rangement** (bouton « Ranger » de Mes playlists) : playlists dont les artistes relèvent surtout d'un autre dossier de style, playlists en vrac à la racine au style net, playlists pas écoutées depuis plus d'un an (quand Spotify connaît la date). Pour chacune : « Déplacer vers… » (ou « Archiver », dans un dossier `ARCHIVES`) et « Ignorer ». Rien ne bouge sans ton clic.
 - **Mes albums par date de sortie** : tris « Sortie ↓ » et « Sortie ↑ ».
 - **Cartes épinglées en haut** : clic droit sur une playlist, un album, un artiste, une émission ou un dossier → « Épingler sur l'accueil ». Les titres likés sont toujours là, avec lecture ou aléatoire.
 
