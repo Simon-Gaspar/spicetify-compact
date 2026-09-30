@@ -24,7 +24,7 @@ For the **Spotify desktop app downloaded from spotify.com** (not the Microsoft S
 
   Each one gets a move (« Déplacer vers… ») or archive (« Archiver », into an `ARCHIVES` folder) button, plus « Ignorer » (dismiss). Nothing moves until you click.
 - **Albums by release date**: « Sortie ↓ » and « Sortie ↑ » sorts.
-- **Pinned cards at the top**: right-click a playlist, album, artist, show or folder → « Épingler sur l'accueil » (pin to home). Drag any card, Liked Songs included, to reorder them. Liked Songs is always there, with play or shuffle.
+- **Pin your 3 go-to playlists at the top**: empty dashed slots show where they go. Right-click a playlist, album, artist, show or folder → « Épingler sur l'accueil » (pin to home); more than 3 works too. Drag any card, Liked Songs included, to reorder them. Liked Songs is always there, with play or shuffle.
 
 ### Fullscreen playback
 The fullscreen button in the player bar (or ⤢ in the Now Playing panel) opens a fullscreen view:

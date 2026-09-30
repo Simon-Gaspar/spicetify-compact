@@ -1225,6 +1225,17 @@ function PinHero({ item, reorder, drag }) {
     h("button", { className: "acc-round", title: "Lire", onClick: (e) => { e.stopPropagation(); playPinned(item); } }, h(PlayIcon))));
 }
 
+const PIN_SLOTS = 3;
+
+// Emplacement libre : carte en pointillé qui explique comment épingler.
+function PinSlot() {
+  return h("div", { className: "acc-slot", title: "Clic droit sur une playlist, un album, un artiste ou un dossier → « Épingler sur l'accueil »" },
+    h("div", { className: "acc-slot-plus" }, "+"),
+    h("div", { className: "acc-liked-text" },
+      h("div", { className: "acc-liked-title" }, "Épingle une playlist"),
+      h("div", { className: "acc-sub" }, "Clic droit → Épingler sur l'accueil")));
+}
+
 function PinnedHeroes({ main }) {
   const pinned = usePins();
   const shown = (pinned || []).filter((i) => pinGroup(i) === main);
@@ -1246,11 +1257,16 @@ function PinnedHeroes({ main }) {
       setDrag(null);
     },
   };
+  // Musique : jusqu'à 3 épingles, les places libres s'affichent en pointillé pour montrer qu'on
+  // choisit ce qui va là (au-delà de 3, plus d'emplacement vide).
+  const free = main === "music" && pinned ? Math.max(0, PIN_SLOTS - shown.filter((i) => i.type !== "liked").length) : 0;
+  const slots = Array.from({ length: free }, (_, k) => h(PinSlot, { key: "slot" + k }));
+  const cards = shown.map((i) => (i.type === "liked" ? h(LikedHero, { key: i.uri, reorder, drag }) : h(PinHero, { key: i.uri, item: i, reorder, drag })));
+  const likedAt = shown.findIndex((i) => i.type === "liked");
+  if (likedAt >= 0) cards.splice(likedAt, 0, ...slots); else cards.push(...slots);
   return h("div", { className: "acc-heroes" },
-    shown.map((i) => (i.type === "liked" ? h(LikedHero, { key: i.uri, reorder, drag }) : h(PinHero, { key: i.uri, item: i, reorder, drag }))),
-    pinned && !shown.some((i) => i.type !== "liked") && h("div", { className: "acc-pin-hint" }, {
-      podcasts: "Clic droit sur une émission ou un livre audio → « Épingler sur l'accueil » pour le retrouver ici.",
-    }[main] || "Clic droit sur une playlist, un album ou un artiste → « Épingler sur l'accueil » pour le retrouver ici."),
+    cards,
+    main === "podcasts" && pinned && !shown.length && h("div", { className: "acc-pin-hint" }, "Clic droit sur une émission ou un livre audio → « Épingler sur l'accueil » pour le retrouver ici."),
     !pinned && main === "music" && h(LikedHero, { reorder, drag }));
 }
 
@@ -1391,6 +1407,10 @@ header[data-testid="topbar"] { display: none !important; }
 .acc-tidy-name { font-weight: 600; cursor: pointer; color: inherit; }
 .acc-tidy-name:hover { text-decoration: underline; }
 .acc-tidy-note { margin-top: 14px; }
+.acc-slot { display: flex; align-items: center; gap: 14px; padding: 8px 10px 8px 8px; flex: 0 1 300px; min-width: 220px; border-radius: 8px; border: 1.5px dashed rgba(255,255,255,.22); color: var(--acc-sub); cursor: help; }
+.acc-slot:hover { border-color: rgba(255,255,255,.45); color: var(--acc-text); }
+.acc-slot-plus { width: 56px; height: 56px; flex: none; border-radius: 4px; display: grid; place-items: center; border: 1.5px dashed rgba(255,255,255,.22); font-size: 1.5rem; font-weight: 300; }
+.acc-slot .acc-liked-title { color: inherit; }
 .acc-pin-hint { display: flex; align-items: center; max-width: 320px; padding: 10px 14px; border: 1px dashed rgba(255,255,255,.2); border-radius: 8px; color: var(--acc-sub); font-size: .8125rem; }
 .acc-heroes { display: flex; gap: 12px; flex-wrap: wrap; justify-content: flex-end; flex: 1 1 auto; min-width: 0; }
 .acc-liked-art.is-season { background: linear-gradient(135deg, #b3541e, #f2c14e); overflow: hidden; }
