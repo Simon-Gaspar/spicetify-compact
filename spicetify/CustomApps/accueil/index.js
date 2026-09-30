@@ -145,7 +145,6 @@ const EN = {
   "{n} titre": "{n} track",
   "{name} — glisser pour réorganiser": "{name} — drag to reorder",
   "Tout afficher ({n})": "Show all ({n})",
-  "Afficher plus ({n})": "Show more ({n})",
   "Afficher plus ({n} restants)": "Show more ({n} left)",
   "Analyse des styles de ta bibliothèque… {done}/{total} playlists (une seule fois)": "Analyzing your library's styles… {done}/{total} playlists (one time only)",
   "Lancer tout {style} en aléatoire": "Shuffle all of {style}",
@@ -946,14 +945,13 @@ function Tile({ card, showOwner }) {
 
 // id "all" : une seule grille (paramètre splitPlaylists désactivé), propriétaire en infobulle
 // pour les playlists qui ne sont pas à soi.
+// Toutes les playlists d'un coup : les pochettes ne se chargent qu'en arrivant à l'écran (lazy).
 function Column({ id, label, items }) {
-  const [n, setN] = useState(60);
   return h("div", { className: "acc-col" },
     h("div", { className: "acc-col-head" }, h("h2", null, label), h("span", { className: "acc-count" }, items.length)),
     items.length
-      ? h("div", { className: "acc-tiles" }, items.slice(0, n).map((c) => h(Tile, { key: c.uri, card: c, showOwner: id === "others" || (id === "all" && c.group !== "self") })))
-      : h("div", { className: "acc-sub" }, tr("Aucune playlist")),
-    items.length > n && h("button", { className: "acc-link acc-col-more", onClick: () => setN(n + 120) }, tr("Afficher plus ({n})", { n: items.length - n })));
+      ? h("div", { className: "acc-tiles" }, items.map((c) => h(Tile, { key: c.uri, card: c, showOwner: id === "others" || (id === "all" && c.group !== "self") })))
+      : h("div", { className: "acc-sub" }, tr("Aucune playlist")));
 }
 
 // ---------- suggestions de rangement ----------
@@ -1909,7 +1907,6 @@ header[data-testid="topbar"] { display: none !important; }
 .acc-col-head { display: flex; align-items: baseline; gap: 8px; padding: 0 2px 10px; margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,.08); }
 .acc-col-head h2 { font-size: 1.125rem; font-weight: 700; margin: 0; }
 .acc-count { color: var(--acc-sub); font-size: .8125rem; }
-.acc-col-more { margin: 10px 2px 0; }
 .acc-liked { position: relative; }
 .acc-pin-x { position: absolute; top: 4px; left: 4px; width: 22px; height: 22px; border: 0; border-radius: 50%; background: rgba(0,0,0,.75); color: #fff; font-size: .95rem; line-height: 1; cursor: pointer; opacity: 0; transition: opacity .12s; z-index: 1; }
 .acc-liked:hover .acc-pin-x, .acc-pin-x:focus-visible { opacity: 1; }
