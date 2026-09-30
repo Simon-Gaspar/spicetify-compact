@@ -378,5 +378,6 @@
       .catch(warn("épingles"));
   }
 
-  Object.assign(window.AccueilCore, { readLater, addLater, removeLater, inLater, findItemMenu, describe, readPins, pinUri, unpinUri, isPinned });
+  Object.assign(window.AccueilCore, { readLater, addLater, removeLater, inLater, findItemMenu, describe, readPins, pinUri, unpinUri, isPinned,
+    setPins: (list) => { if (Array.isArray(list) && list.every((u) => typeof u === "string")) writePins(list); } });
 })();

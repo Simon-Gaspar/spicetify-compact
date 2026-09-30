@@ -1175,14 +1175,35 @@ async function playPinned(item) {
   } catch (e) { notify("Lecture impossible : " + errMsg(e), true); }
 }
 
-function PinHero({ item }) {
+// Réorganisation des épingles par glisser-déposer, avec un type de glisser propre (distinct des
+// titres Spotify qu'on dépose sur une carte pour les ajouter à la playlist).
+const PIN_DRAG = "application/x-accueil-pin";
+const isPinDrag = (e) => e.dataTransfer.types.includes(PIN_DRAG);
+
+function PinHero({ item, reorder, drag }) {
   const [title, sub] = pinLabel(item);
   const droppable = item.type === "playlist" && item.isOwnedBySelf;
   const [over, drop] = useDrop((uris) => addToPlaylist({ uri: item.uri, name: item.name }, uris));
   const img = item.images?.[0]?.url;
   const isSeason = sub === "Saison en cours";
   const open = () => (item.type === "your-episodes" ? Spicetify.Platform.History.push("/collection/your-episodes") : openUri(item.uri));
-  return withMenu(item.uri, h("div", { className: "acc-liked" + (over ? " is-drop" : ""), onClick: open, title: item.name, ...(droppable ? drop : {}) },
+  const handlers = {
+    draggable: true,
+    onDragStart: (e) => { e.dataTransfer.setData(PIN_DRAG, item.uri); e.dataTransfer.effectAllowed = "move"; reorder.start(item.uri); },
+    onDragEnd: () => reorder.end(),
+    onDragOver: (e) => {
+      if (isPinDrag(e)) {
+        e.preventDefault();
+        const r = e.currentTarget.getBoundingClientRect();
+        reorder.over(item.uri, e.clientX < r.left + r.width / 2 ? "before" : "after");
+      } else if (droppable) drop.onDragOver(e);
+    },
+    onDragLeave: (e) => { if (droppable) drop.onDragLeave(e); },
+    onDrop: (e) => { if (isPinDrag(e)) { e.preventDefault(); reorder.drop(); } else if (droppable) drop.onDrop(e); },
+  };
+  const cls = "acc-liked" + (over ? " is-drop" : "") + (drag?.uri === item.uri ? " is-dragging" : "") +
+    (drag?.target === item.uri && drag.uri !== item.uri ? ` is-drop-${drag.side}` : "");
+  return withMenu(item.uri, h("div", { className: cls, onClick: open, title: `${item.name} — glisser pour réorganiser`, ...handlers },
     h("div", { className: "acc-liked-art" + (isSeason ? " is-season" : "") }, img ? h("img", { src: img, alt: "" }) : null),
     h("div", { className: "acc-liked-text" },
       h("div", { className: "acc-liked-title" }, title),
@@ -1194,8 +1215,25 @@ function PinHero({ item }) {
 function PinnedHeroes({ main }) {
   const pinned = usePins();
   const shown = (pinned || []).filter((i) => pinGroup(i) === main);
+  const [drag, setDrag] = useState(null); // { uri, target, side }
+  const reorder = {
+    start: (uri) => setDrag({ uri }),
+    over: (target, side) => setDrag((d) => (d && (d.target !== target || d.side !== side) ? { ...d, target, side } : d)),
+    end: () => setDrag(null),
+    drop: () => {
+      const core = window.AccueilCore;
+      if (drag?.target && drag.target !== drag.uri && core?.setPins) {
+        const list = (core.readPins() || []).filter((u) => u !== drag.uri);
+        let i = list.indexOf(drag.target);
+        i = i < 0 ? list.length : i + (drag.side === "after" ? 1 : 0);
+        list.splice(i, 0, drag.uri);
+        core.setPins(list);
+      }
+      setDrag(null);
+    },
+  };
   return h("div", { className: "acc-heroes" },
-    shown.map((i) => h(PinHero, { key: i.uri, item: i })),
+    shown.map((i) => h(PinHero, { key: i.uri, item: i, reorder, drag })),
     pinned && !shown.length && h("div", { className: "acc-pin-hint" }, {
       podcasts: "Clic droit sur une émission ou un livre audio → « Épingler sur l'accueil » pour le retrouver ici.",
     }[main] || "Clic droit sur une playlist, un album ou un artiste → « Épingler sur l'accueil » pour le retrouver ici."),
@@ -1382,6 +1420,10 @@ button.acc-schip { padding: 5px 12px; }
 .acc-disco-kicker { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--acc-sub); }
 .acc-disco-name { font-size: clamp(2rem, 4vw, 3.5rem); font-weight: 800; letter-spacing: -.02em; margin: 2px 0 6px; }
 .acc-empty { color: var(--acc-sub); padding: 40px 0; }
+.acc-liked[draggable="true"] { cursor: grab; }
+.acc-liked.is-dragging { opacity: .4; }
+.acc-liked.is-drop-before { box-shadow: inset 3px 0 0 var(--acc-green); }
+.acc-liked.is-drop-after { box-shadow: inset -3px 0 0 var(--acc-green); }
 .acc-liked.is-drop { background: var(--acc-chip-hover); box-shadow: inset 0 0 0 2px var(--acc-green); }
 .acc-tile.is-drop .acc-tile-img::after { content: ""; position: absolute; inset: 0; border: 3px solid var(--acc-green); border-radius: inherit; pointer-events: none; }
 .acc-tile.is-drop .acc-tile-img img { filter: brightness(.6); }
