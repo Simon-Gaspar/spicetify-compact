@@ -1379,7 +1379,8 @@ function PinHero({ item, reorder, drag }) {
     h("button", { className: "acc-round", title: tr("Lire"), onClick: (e) => { e.stopPropagation(); playPinned(item); } }, h(PlayIcon))));
 }
 
-const PIN_SLOTS = 3;
+// 3 emplacements en tout dans l'onglet Musique, Titres likés compris : 2 épingles au choix.
+const PIN_SLOTS = 2;
 
 // Emplacement libre : carte en pointillé qui explique comment épingler.
 function PinSlot() {
@@ -1392,7 +1393,7 @@ function PinSlot() {
 
 function PinnedHeroes({ main }) {
   const pinned = usePins();
-  // Musique : 3 emplacements au plus (Titres likés en plus) ; au-delà, seules les 3 premières.
+  // Musique : 2 épingles au plus à côté de Titres likés ; au-delà, seules les 2 premières.
   let kept = 0;
   const shown = (pinned || []).filter((i) => pinGroup(i) === main && (main !== "music" || i.type === "liked" || ++kept <= PIN_SLOTS));
   const [drag, setDrag] = useState(null); // { uri, target, side }
@@ -1413,7 +1414,7 @@ function PinnedHeroes({ main }) {
       setDrag(null);
     },
   };
-  // Musique : les places libres sur les 3 s'affichent en pointillé, pour montrer qu'on choisit ce qui va là.
+  // Musique : les places libres s'affichent en pointillé, pour montrer qu'on choisit ce qui va là.
   const free = main === "music" && pinned ? Math.max(0, PIN_SLOTS - shown.filter((i) => i.type !== "liked").length) : 0;
   const slots = Array.from({ length: free }, (_, k) => h(PinSlot, { key: "slot" + k }));
   const cards = shown.map((i) => (i.type === "liked" ? h(LikedHero, { key: i.uri, reorder, drag }) : h(PinHero, { key: i.uri, item: i, reorder, drag })));
@@ -1568,7 +1569,7 @@ header[data-testid="topbar"] { display: none !important; }
 .acc-slot-plus { width: 56px; height: 56px; flex: none; border-radius: 4px; display: grid; place-items: center; border: 1.5px dashed rgba(255,255,255,.22); font-size: 1.5rem; font-weight: 300; }
 .acc-slot .acc-liked-title { color: inherit; }
 .acc-pin-hint { display: flex; align-items: center; max-width: 320px; padding: 10px 14px; border: 1px dashed rgba(255,255,255,.2); border-radius: 8px; color: var(--acc-sub); font-size: .8125rem; }
-/* Une seule ligne, toujours : au plus 3 épingles + Titres likés, qui rétrécissent au besoin. */
+/* Une seule ligne, toujours : 3 cartes (2 épingles + Titres likés), qui rétrécissent au besoin. */
 .acc-heroes { display: flex; gap: 12px; flex-wrap: nowrap; justify-content: flex-end; flex: 1 1 auto; min-width: 0; }
 .acc-liked-art.is-season { background: linear-gradient(135deg, #b3541e, #f2c14e); overflow: hidden; }
 .acc-liked-art img { width: 100%; height: 100%; object-fit: cover; display: block; }

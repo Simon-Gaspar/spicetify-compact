@@ -21,7 +21,7 @@ const ACCUEIL_EN = {
   "Retirer de l'accueil": "Unpin from home",
   "Discographie complète": "Full discography",
   "Épinglé sur l'accueil": "Pinned to home",
-  "Accueil complet (3 épingles) : retire une épingle d'abord": "Home is full (3 pins): unpin one first",
+  "Accueil complet (3 emplacements, Titres likés compris) : retire une épingle d'abord": "Home is full (3 slots, Liked Songs included): unpin one first",
   "Ajouté à « Plus tard »": "Added to Later",
   "{n} éléments ajoutés à « Plus tard »": "{n} items added to Later",
   "Déjà dans « Plus tard »": "Already in Later",
@@ -401,9 +401,9 @@ function accueilT(fr, vars) {
     const list = readPins();
     if (list) writePins([current, ...list.filter((u) => u !== current && !previous.includes(u))]);
   }
-  // Onglet Musique : 3 emplacements au plus (Titres likés à part). Les épingles de podcasts (émissions,
-  // épisodes enregistrés) vont dans l'onglet Podcasts et ne comptent pas.
-  const PIN_SLOTS = 3;
+  // Onglet Musique : 3 emplacements, Titres likés compris, donc 2 épingles au choix. Les épingles de
+  // podcasts (émissions, épisodes enregistrés) vont dans l'onglet Podcasts et ne comptent pas.
+  const PIN_SLOTS = 2;
   async function pinUri(uri) {
     const list = readPins() || [];
     const podcast = (u) => /^spotify:(show|episode):/.test(u);
@@ -412,7 +412,7 @@ function accueilT(fr, vars) {
       try { episodes = (await Spicetify.Platform.LibraryAPI.getContents({ limit: 50 })).items.find((i) => i.type === "your-episodes")?.uri; } catch {}
       const music = list.filter((u) => u !== "accueil:liked" && u !== episodes && !podcast(u));
       if (music.length >= PIN_SLOTS) {
-        Spicetify.showNotification?.(accueilT("Accueil complet (3 épingles) : retire une épingle d'abord"), true);
+        Spicetify.showNotification?.(accueilT("Accueil complet (3 emplacements, Titres likés compris) : retire une épingle d'abord"), true);
         return;
       }
     }

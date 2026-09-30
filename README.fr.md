@@ -17,7 +17,7 @@ Pour **Spotify sur ordinateur, version téléchargée sur spotify.com** (pas cel
 - **Nombre d'écoutes** sur chaque playlist et chaque album, et tri « Plus écoutées ».
 - **Suggestions de rangement** (bouton « Ranger » de Mes playlists) : playlists dont les artistes relèvent surtout d'un autre dossier de style, playlists en vrac à la racine au style net, playlists pas écoutées depuis plus d'un an (quand Spotify connaît la date). Pour chacune : « Déplacer vers… » (ou « Archiver », dans un dossier `ARCHIVES`) et « Ignorer ». Rien ne bouge sans ton clic.
 - **Mes albums par date de sortie** : tris « Sortie ↓ » et « Sortie ↑ ».
-- **Tes 3 playlists préférées épinglées en haut** : des emplacements vides en pointillé montrent où elles vont. Clic droit sur une playlist, un album, un artiste, une émission ou un dossier → « Épingler sur l'accueil » (3 emplacements, toujours sur une ligne, à côté de Titres likés). Glisse une carte, Titres likés compris, pour changer l'ordre. Les titres likés sont toujours là, avec lecture ou aléatoire.
+- **3 emplacements en haut : Titres likés + 2 playlists au choix** : des emplacements vides en pointillé montrent où elles vont. Clic droit sur une playlist, un album, un artiste, une émission ou un dossier → « Épingler sur l'accueil » (3 emplacements, Titres likés compris, toujours sur une ligne). Glisse une carte, Titres likés compris, pour changer l'ordre. Les titres likés sont toujours là, avec lecture ou aléatoire.
 
 ### Lecture plein écran
 Le bouton plein écran de la barre du lecteur (ou ⤢ du panneau En cours de lecture) ouvre une vue plein écran : pochette en grand, contrôles, **paroles synchronisées** (clic sur une ligne pour s'y rendre) et liste **À suivre** (clic sur un titre pour y sauter). Échap pour fermer.
