@@ -16,11 +16,15 @@ For the **Spotify desktop app downloaded from spotify.com** (not the Microsoft S
 - **Music / Podcasts & books tabs**, each with its own sub-menu: my playlists, my albums, listen later, mixes for me, new releases, discover. On the podcast side: new episodes, resume, your shows, audiobooks (yours and suggested ones), discover. Any section the theme doesn't recognize lands in Discover instead of disappearing.
 - **My playlists in three columns**: yours, other people's, Spotify's.
 - **Style filters** in every sub-menu, with a ▶ to shuffle a whole style. Styles come from your folders (see [Adapting it to your library](#adapting-it-to-your-library)).
+  - **Sub-filters**: pick a style and its subfolders show up as a second row (Hip-hop › Trap US), each with its own ▶.
+  - **Mixed playlists** (two clear styles, neither dominant, e.g. rap + electro) show up under both filters, wherever they're filed.
 - **Play counts** on every playlist and album, and a *Most played* sort.
 - **Tidy-up suggestions** (*Tidy up* button in My playlists):
   - playlists whose artists mostly belong to another style folder;
   - loose playlists at the library root with a clear style;
-  - playlists not played in over a year, when Spotify knows the date.
+  - playlists not played in over a year, when Spotify knows the date;
+  - **subfolders to create** in a broad style folder: groups of playlists that share their artists (rare artists weigh more). Each group comes with a suggested name you can edit, and you can drop playlists from it before clicking *Create subfolder*;
+  - playlists at the top level of a style folder that are close to one of its existing subfolders.
 
   Each one gets a *Move to…* or *Archive* button (into an `ARCHIVES` folder), plus *Dismiss*. Nothing moves until you click.
 - **Albums by release date**: *Release ↓* and *Release ↑* sorts.
@@ -88,6 +92,7 @@ Back to stock Spotify: `spicetify restore`.
 - **Styles**: one style = one top-level folder in your library, detected automatically (except `SAISONS`).
   - Without folders there are no style filters; a hint in the interface points this out. Everything else works.
   - Albums, mixes and discoveries are classified from their artists. Anything that fits no style goes into *Mixed*.
+  - Subfolders inside a style folder become sub-filters (first level only; deeper folders count toward their parent). Subfolder suggestions show up for folders with at least 12 playlists at their top level, or that already have subfolders.
   - To keep only some folders or rename how they're displayed, edit `STYLE_LABELS` at the top of `CustomApps/accueil/index.js`, then run `spicetify apply`. The folder is `%APPDATA%\spicetify` on Windows and `~/.config/spicetify` on Mac. As soon as one folder from that list exists, only the listed folders count.
   - The analysis runs again every week.
 - **Automatic seasons**: only active if you have a `SAISONS` folder at the root of your library. Without it, nothing is created.

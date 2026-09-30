@@ -14,7 +14,7 @@
 // 5. Vérifie les API internes de Spotify dont dépend le thème et signale celles qui manquent
 //    (elles changent parfois avec les mises à jour de Spotify).
 // Version installée du thème : à incrémenter avec version.json à la racine du dépôt à chaque publication.
-const ACCUEIL_VERSION = "1.0.0";
+const ACCUEIL_VERSION = "1.1.0";
 
 // Langue : français si Spotify est en français, anglais sinon ; accueil:lang ("fr" | "en") force une
 // langue. Calculée à chaque appel (Spicetify.Locale n'est pas toujours prêt au démarrage).

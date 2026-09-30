@@ -78,7 +78,6 @@ const EN = {
   "Date de sortie, les plus anciens d'abord": "Release date, oldest first",
   "Anciennes": "Oldest",
   "Ranger": "Tidy up",
-  "Playlists mal rangées, en vrac ou en sommeil": "Misfiled, loose or dormant playlists",
   "Par écoute récente, en attendant le nombre d'écoutes": "By recent plays, until play counts build up",
   "Discographie complète": "Full discography",
   "Dans ta bibliothèque": "In your library",
@@ -98,6 +97,22 @@ const EN = {
   "Pas écoutées depuis plus d'un an": "Not played in over a year",
   "Archiver": "Archive",
   "Ignorer": "Dismiss",
+  "Tout {style}": "All {style}",
+  "Autres": "Others",
+  "Sous-dossiers à créer": "Subfolders to create",
+  "À ranger dans un sous-dossier": "To file into a subfolder",
+  "À la racine de {from}, proche du sous-dossier {sub}": "At the top level of {from}, close to the {sub} subfolder",
+  "dans {label} · {n} playlists": "in {label} · {n} playlists",
+  "Créer le sous-dossier": "Create subfolder",
+  "Nom du sous-dossier": "Subfolder name",
+  "Nouveau sous-dossier": "New subfolder",
+  "Remettre dans la proposition": "Put back in the suggestion",
+  "Retirer de la proposition": "Remove from the suggestion",
+  "dossier non créé": "folder not created",
+  "Spotify a refusé le déplacement": "Spotify refused the move",
+  "Sous-dossier « {name} » créé, mais {n} playlists n'ont pas pu y être déplacées": "Subfolder \"{name}\" created, but {n} playlists couldn't be moved into it",
+  "Sous-dossier « {name} » créé dans {label} ({n} playlists)": "Subfolder \"{name}\" created in {label} ({n} playlists)",
+  "Playlists mal rangées, en vrac ou en sommeil, sous-dossiers à créer": "Misfiled, loose or dormant playlists, subfolders to create",
   "Rien à ranger : ta bibliothèque est en ordre.": "Nothing to tidy: your library is in order.",
   "Analyse impossible : ": "Analysis failed: ",
   "Rangement impossible : ": "Couldn't move: ",
@@ -169,7 +184,8 @@ const cache = {};
 // ---------- styles ----------
 // Référence : des dossiers de premier niveau de la bibliothèque, un dossier = un style. Chaque artiste
 // prend le style du dossier où il apparaît le plus ; le reste (albums, mix, nouveautés…) est classé
-// par vote de ses artistes.
+// par vote de ses artistes. Les sous-dossiers d'un style donnent des sous-filtres. Une playlist
+// mixte (deux styles nets, aucun majoritaire) a un second style : elle apparaît sous les deux filtres.
 // Dossiers de style et leurs noms d'affichage. Si la bibliothèque en contient au moins un, seuls
 // ceux-là comptent (les autres dossiers — humeurs, partages… — sont ignorés) ; sinon, chaque dossier
 // de premier niveau est un style, sous son propre nom (capitales adoucies).
@@ -225,29 +241,45 @@ async function trackArtists(uri, limit) {
   return (r.items || []).flatMap((t) => (t.artists || []).map((a) => a.uri)).filter(Boolean);
 }
 
+// Second style d'une playlist mixte : les deux premiers styles de ses artistes pèsent chacun au moins
+// 30 %, aucun ne dépasse 55 %, sur au moins 10 artistes reconnus. tally : { style: nb d'artistes }.
+function secondStyle(tally, known, own) {
+  if (known < 10) return null;
+  const [a, b] = Object.entries(tally).sort((x, y) => y[1] - x[1]);
+  if (!b || a[1] / known >= 0.55 || b[1] / known < 0.3) return null;
+  const other = a[0] !== own ? a[0] : b[0];
+  return other !== own ? other : null;
+}
+
 async function buildStyleIndex() {
   const folders = styleFoldersOf(await Spicetify.Platform.RootlistAPI.getContents({}));
   const styles = folders.map((f) => f.label);
-  const playlists = {};
-  const walk = (items, style) => {
+  const playlists = {}, subs = {}, also = {};
+  // sub : sous-dossier de premier niveau dans le dossier de style (les niveaux plus profonds y comptent)
+  const walk = (items, style, sub) => {
     for (const i of items) {
-      if (i.type === "folder") walk(i.items || [], style);
-      else if (i.type === "playlist") playlists[i.uri] = style;
+      if (i.type === "folder") walk(i.items || [], style, sub || i.name);
+      else if (i.type === "playlist") { playlists[i.uri] = style; if (sub) subs[i.uri] = sub; }
     }
   };
-  for (const { label, folder } of folders) walk(folder.items || [], label);
+  for (const { label, folder } of folders) walk(folder.items || [], label, null);
 
-  const votes = {};
+  const votes = {}; // artiste → { style: nb de titres }, pour le style des artistes
+  const pvotes = {}; // artiste → { style: nb de playlists }, pour repérer les playlists mixtes
+  const artistsOf = {};
   const uris = Object.keys(playlists);
   styleProgress = { done: 0, total: uris.length };
   notifyStyles();
   await pool(uris, 6, async (uri) => {
     const style = playlists[uri];
     try {
-      for (const a of await trackArtists(uri, 150)) {
+      const list = await trackArtists(uri, 150);
+      for (const a of list) {
         const v = (votes[a] ||= {});
         v[style] = (v[style] || 0) + 1;
       }
+      artistsOf[uri] = [...new Set(list)];
+      for (const a of artistsOf[uri]) { const v = (pvotes[a] ||= {}); v[style] = (v[style] || 0) + 1; }
     } finally {
       styleProgress.done += 1;
       if (styleProgress.done % 8 === 0) notifyStyles();
@@ -259,7 +291,21 @@ async function buildStyleIndex() {
     const best = Object.entries(v).sort((x, y) => y[1] - x[1])[0][0];
     artists[a] = styles.indexOf(best);
   }
-  const idx = { v: 2, at: Date.now(), styles, playlists, artists, items: {} };
+  // Style de chaque artiste compté sans la playlist examinée (sinon il voterait toujours pour son dossier).
+  for (const [uri, own] of Object.entries(playlists)) {
+    const tally = {};
+    let known = 0;
+    for (const a of artistsOf[uri] || []) {
+      const v = { ...pvotes[a], [own]: pvotes[a][own] - 1 };
+      const best = Object.entries(v).filter(([, n]) => n > 0).sort((x, y) => y[1] - x[1])[0];
+      if (!best) continue;
+      known += 1;
+      tally[best[0]] = (tally[best[0]] || 0) + 1;
+    }
+    const other = secondStyle(tally, known, own);
+    if (other) also[uri] = other;
+  }
+  const idx = { v: 3, at: Date.now(), styles, playlists, subs, also, artists, items: {} };
   lsSet(STYLE_KEY, idx);
   styleProgress = null;
   notifyStyles();
@@ -269,13 +315,14 @@ async function buildStyleIndex() {
 function getStyleIndex() {
   if (!styleIndexPromise) {
     const cached = lsGet(STYLE_KEY);
-    // v2 : styles lus dans la bibliothèque (index v1 : liste figée, à reconstruire)
-    styleIndexPromise = cached?.v === 2 && Date.now() - cached.at < STYLE_TTL ? Promise.resolve(cached) : buildStyleIndex();
+    // v3 : sous-dossiers et playlists mixtes (index plus ancien : à reconstruire)
+    styleIndexPromise = cached?.v === 3 && Date.now() - cached.at < STYLE_TTL ? Promise.resolve(cached) : buildStyleIndex();
     styleIndexPromise.catch(() => { styleIndexPromise = null; styleProgress = null; notifyStyles(); });
   }
   return styleIndexPromise;
 }
 
+// { style, also } : style majoritaire des artistes (Mixte sans majorité), et second style si mixte
 function voteStyle(artistUris, idx) {
   const count = {};
   let known = 0;
@@ -283,22 +330,24 @@ function voteStyle(artistUris, idx) {
     const s = idx.artists[a];
     if (s === undefined) continue;
     known += 1;
-    count[s] = (count[s] || 0) + 1;
+    count[idx.styles[s]] = (count[idx.styles[s]] || 0) + 1;
   }
-  if (!known || (artistUris.length > 3 && known < 3)) return MIXED;
+  if (!known || (artistUris.length > 3 && known < 3)) return { style: MIXED };
   const [best, n] = Object.entries(count).sort((x, y) => y[1] - x[1])[0];
-  return n / known >= 0.4 ? idx.styles[best] : MIXED;
+  const also = secondStyle(count, known, best);
+  return { style: (also || n / known >= 0.4) ? best : MIXED, also };
 }
 
 let styleSaveTimer;
 async function styleOf(card, idx) {
   if (idx.playlists[card.uri]) return idx.playlists[card.uri];
   if (idx.items[card.uri]) return idx.items[card.uri];
-  let style = MIXED;
+  let style = MIXED, also = null;
   if (card.uri.startsWith("spotify:artist:")) style = idx.artists[card.uri] !== undefined ? idx.styles[idx.artists[card.uri]] : MIXED;
-  else if (card.artistUris?.length) style = voteStyle(card.artistUris, idx);
-  else if (card.uri.startsWith("spotify:playlist:")) style = voteStyle(await trackArtists(card.uri, 60), idx);
+  else if (card.artistUris?.length) ({ style, also } = voteStyle(card.artistUris, idx));
+  else if (card.uri.startsWith("spotify:playlist:")) ({ style, also } = voteStyle(await trackArtists(card.uri, 60), idx));
   idx.items[card.uri] = style;
+  if (also) idx.also[card.uri] = also;
   clearTimeout(styleSaveTimer);
   styleSaveTimer = setTimeout(() => lsSet(STYLE_KEY, idx), 2000);
   return style;
@@ -760,7 +809,7 @@ function useStyles(items) {
     }).then(flush);
     return () => { alive = false; };
   }, [idx, items]);
-  return { styles, progress: styleProgress, names: idx?.styles || [] };
+  return { styles, also: idx?.also || {}, subs: idx?.subs || {}, progress: styleProgress, names: idx?.styles || [] };
 }
 
 // Dossiers de style de la bibliothèque, par libellé (« Électro » → dossier ELECTRO)
@@ -770,7 +819,7 @@ const getStyleFolders = () =>
     Object.fromEntries(styleFoldersOf(t).map(({ label, folder }) => [label, folder]))));
 
 // Filtre par style ; le ▶ de chaque style lance tout le dossier correspondant en aléatoire.
-function StyleBar({ items, styles, names, progress, value, onChange }) {
+function StyleBar({ items, styles, also = {}, names, progress, value, onChange }) {
   const [folders, setFolders] = useState({});
   const [busy, setBusy] = useState(null);
   useEffect(() => { getStyleFolders().then(setFolders, (e) => warn("dossiers de style", e)); }, []);
@@ -779,6 +828,7 @@ function StyleBar({ items, styles, names, progress, value, onChange }) {
   for (const c of items) {
     const st = styles[c.uri];
     if (st) counts[st] = (counts[st] || 0) + 1;
+    if (also[c.uri]) counts[also[c.uri]] = (counts[also[c.uri]] || 0) + 1;
   }
   const options = [...names, MIXED].filter((st) => counts[st]);
   // Aucun dossier de style dans la bibliothèque : on explique comment en avoir.
@@ -800,7 +850,39 @@ function Toolbar({ children }) {
   return h("div", { className: "acc-toolbar" }, children);
 }
 
-const byStyle = (style, styles) => (c) => style === "all" || styles[c.uri] === style;
+const byStyle = (style, styles, also = {}) => (c) => style === "all" || styles[c.uri] === style || also[c.uri] === style;
+
+// Sous-filtres d'un style : ses sous-dossiers (dans l'ordre de la bibliothèque), chacun avec son ▶,
+// et « Autres » pour ce qui n'est dans aucun (racine du dossier, playlists mixtes venues d'un autre style).
+const OTHER_SUB = "\u0000autres";
+const bySub = (style, sub, styles, subs) => (c) =>
+  sub === "all" || (sub === OTHER_SUB ? styles[c.uri] !== style || !subs[c.uri] : styles[c.uri] === style && subs[c.uri] === sub);
+
+function SubBar({ items, style, styles, subs, value, onChange }) {
+  const [folder, setFolder] = useState(null);
+  const [busy, setBusy] = useState(null);
+  useEffect(() => { getStyleFolders().then((f) => setFolder(f[style] || null), (e) => warn("dossiers de style", e)); }, [style]);
+  const counts = {};
+  let other = 0;
+  for (const c of items) {
+    if (styles[c.uri] === style && subs[c.uri]) counts[subs[c.uri]] = (counts[subs[c.uri]] || 0) + 1;
+    else other += 1;
+  }
+  const children = (folder?.items || []).filter((i) => i.type === "folder" && counts[i.name]);
+  if (!children.length) return null;
+  const launch = async (f) => {
+    setBusy(f.uri);
+    try { await playFolder(f); } catch (e) { notify(tr("Lecture impossible : ") + errMsg(e), true); }
+    setBusy(null);
+  };
+  const chip = (id, label, n, f) => h("span", { key: id, className: "acc-schip is-sub" + (value === id ? " is-on" : "") },
+    f && h("button", { className: "acc-schip-play", title: tr("Lancer tout {style} en aléatoire", { style: label }), disabled: !!busy, onClick: () => launch(f) }, busy === f.uri ? "…" : h(PlayIcon)),
+    h("button", { className: "acc-schip-label", onClick: () => onChange(id) }, label, h("span", { className: "acc-chip-n" }, n)));
+  return h("div", { className: "acc-styles acc-subs" },
+    h("button", { className: "acc-schip is-sub" + (value === "all" ? " is-on" : ""), onClick: () => onChange("all") }, tr("Tout {style}", { style: tr(style) })),
+    children.map((f) => chip(f.name, f.name, counts[f.name], f)),
+    other > 0 && chip(OTHER_SUB, tr("Autres"), other, null));
+}
 
 const byRecent = (a, b) => b.lastPlayedAt.localeCompare(a.lastPlayedAt);
 const byName = (a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" });
@@ -845,39 +927,151 @@ function Column({ id, label, items }) {
 }
 
 // ---------- suggestions de rangement ----------
-// Trois cas, chacun avec une action d'un clic et « Ignorer » :
+// Cinq cas, chacun avec une action d'un clic et « Ignorer » :
 // - playlist d'un dossier de style dont les artistes relèvent surtout d'un autre style ;
 // - playlist en vrac à la racine dont le style est net (hors épinglées et saisons) ;
+// - sous-dossier à créer dans un style : groupe de playlists qui partagent leurs artistes ;
+// - playlist à la racine d'un style, proche d'un de ses sous-dossiers existants ;
 // - playlist pas écoutée depuis plus d'un an (quand Spotify connaît la date), à archiver.
 // Le style d'un artiste est compté sans la playlist examinée : sinon un artiste présent seulement
 // là « voterait » toujours pour son dossier actuel. Résultat gardé une semaine (accueil:tidy).
 const TIDY_KEY = "accueil:tidy";
+const TIDY_V = 2; // v2 : sous-dossiers
 const TIDY_IGNORED = "accueil:tidy-ignored";
 const TIDY_TTL = 7 * 86400000;
 const ARCHIVE_FOLDER = "ARCHIVES";
 const SEASON_NAME = /^(hiver|printemps|été|automne)\s*['‘’`´]\s*\d{2}$/i;
+
+// Sous-dossiers : regroupement hiérarchique (moyenne des similarités) des playlists d'un style, d'après
+// leurs artistes. Un artiste présent dans peu de playlists pèse plus (idf) ; ceux qui ne sont que dans
+// une seule ne relient rien et sont ignorés. Les sous-dossiers existants sont des groupes figés : ils
+// peuvent attirer des playlists de la racine, pas fusionner entre eux. Un nouveau groupe n'est proposé
+// qu'à partir de REFINE_MIN playlists, dans un dossier qui en a au moins REFINE_FOLDER à sa racine.
+const REFINE_SIM = 0.08;
+const REFINE_MIN = 3;
+const REFINE_FOLDER = 12;
+const NAME_STOP = new Set(("the of and de du des la le les et en a à my by for to is this that best top new mix mixes playlist playlists " +
+  "music musique musica sound sounds radio essentials classics classic vibes songs tracks hits volume vol").split(" "));
+
+function refineFolders(folders, where, artistsOf, artistNames) {
+  const uris = Object.keys(where);
+  const df = {};
+  for (const u of uris) for (const a of artistsOf[u] || []) df[a] = (df[a] || 0) + 1;
+  const vec = (u) => {
+    const v = new Map();
+    for (const a of artistsOf[u] || []) if (df[a] > 1) v.set(a, Math.log(uris.length / df[a]));
+    return v;
+  };
+  const norm = (v) => Math.sqrt([...v.values()].reduce((s, w) => s + w * w, 0));
+  const newSubs = [], joins = [];
+  for (const { label, folder } of folders) {
+    const root = uris.filter((u) => where[u].label === label && !where[u].sub);
+    const subUris = {};
+    for (const f of (folder.items || []).filter((i) => i.type === "folder")) subUris[f.name] = f.uri;
+    const hasSubs = Object.keys(subUris).length > 0;
+    if (root.length < (hasSubs ? 1 : REFINE_FOLDER)) continue;
+    const members = uris.filter((u) => where[u].label === label);
+    const V = {}, N = {};
+    for (const u of members) { V[u] = vec(u); N[u] = norm(V[u]); }
+    const sim = {};
+    for (let i = 0; i < members.length; i++) for (let j = i + 1; j < members.length; j++) {
+      const x = members[i], y = members[j];
+      let d = 0;
+      if (N[x] && N[y]) for (const [a, w] of V[x]) if (V[y].has(a)) d += w * V[y].get(a);
+      sim[x + " " + y] = sim[y + " " + x] = N[x] && N[y] ? d / (N[x] * N[y]) : 0;
+    }
+    const bySub = {};
+    for (const u of members) if (where[u].sub) (bySub[where[u].sub] ||= []).push(u);
+    let clusters = [
+      ...Object.entries(bySub).map(([sub, us]) => ({ us, sub, fixed: true })),
+      ...root.map((u) => ({ us: [u] })),
+    ];
+    const link = (A, B) => {
+      let t = 0;
+      for (const a of A.us) for (const b of B.us) t += sim[a + " " + b];
+      return t / (A.us.length * B.us.length);
+    };
+    for (;;) {
+      let best = -1, bi = -1, bj = -1;
+      for (let i = 0; i < clusters.length; i++) for (let j = i + 1; j < clusters.length; j++) {
+        if (clusters[i].fixed && clusters[j].fixed) continue;
+        const s = link(clusters[i], clusters[j]);
+        if (s > best) { best = s; bi = i; bj = j; }
+      }
+      if (best < REFINE_SIM) break;
+      const [A, B] = [clusters[bi], clusters[bj]];
+      clusters[bi] = { us: A.us.concat(B.us), sub: A.sub || B.sub, fixed: A.fixed || B.fixed };
+      clusters.splice(bj, 1);
+    }
+    const used = new Set(Object.keys(subUris).map((n) => n.toLowerCase()));
+    for (const c of clusters) {
+      const loose = c.us.filter((u) => !where[u].sub);
+      if (c.fixed) {
+        for (const u of loose) joins.push({ uri: u, name: where[u].name, from: label, sub: c.sub, toFolder: subUris[c.sub] });
+      } else if (c.us.length >= REFINE_MIN) {
+        const name = subName(c.us, label, where, artistsOf, artistNames, df, uris.length, used);
+        used.add(name.toLowerCase());
+        newSubs.push({ id: "sub:" + [...c.us].sort()[0], label, folderUri: folder.uri, name, members: c.us.map((u) => ({ uri: u, name: where[u].name })) });
+      }
+    }
+  }
+  return { newSubs: newSubs.sort((a, b) => b.members.length - a.members.length), joins };
+}
+
+// Nom proposé : les mots communs aux titres des playlists (« Jazz Rap », « Dark Jazz »), dans l'ordre et
+// la casse d'un de ces titres ; sinon les deux artistes les plus propres au groupe. Jamais un nom déjà
+// pris dans le dossier, ni un mot seul du nom du style (« Rap » dans Hip-hop / Rap).
+function subName(us, label, where, artistsOf, artistNames, df, total, used) {
+  const styleWords = new Set(label.toLowerCase().split(/[^\p{L}0-9]+/u));
+  const count = {};
+  for (const u of us) {
+    const words = new Set((where[u].name.toLowerCase().match(/[\p{L}0-9]{2,}/gu) || []).filter((w) => !NAME_STOP.has(w) && !/^\d+$/.test(w)));
+    for (const w of words) count[w] = (count[w] || 0) + 1;
+  }
+  const words = Object.entries(count).filter(([, n]) => n >= Math.max(2, Math.ceil(us.length * 0.4))).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([w]) => w);
+  if (words.length && !(words.length === 1 && styleWords.has(words[0]))) {
+    const title = us.map((u) => where[u].name).find((n) => words.every((w) => n.toLowerCase().includes(w))) || "";
+    const at = (w) => title.toLowerCase().indexOf(w);
+    const name = words.sort((a, b) => at(a) - at(b)).map((w) => {
+      const orig = at(w) >= 0 ? title.substr(at(w), w.length) : w;
+      return orig === orig.toLowerCase() ? orig.charAt(0).toUpperCase() + orig.slice(1) : orig;
+    }).join(" ");
+    if (!used.has(name.toLowerCase())) return name;
+  }
+  const score = {};
+  for (const u of us) for (const a of artistsOf[u] || []) if (df[a] > 1) score[a] = (score[a] || 0) + Math.log(total / df[a]);
+  const top = Object.entries(score).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([a]) => artistNames[a]).filter(Boolean);
+  let name = top.join(", ") || tr("Nouveau sous-dossier");
+  for (let i = 2; used.has(name.toLowerCase()); i++) name = `${top.join(", ") || tr("Nouveau sous-dossier")} ${i}`;
+  return name;
+}
 
 async function analyzeLibrary(onProgress) {
   const P = Spicetify.Platform;
   const tree = await P.RootlistAPI.getContents({});
   const folders = styleFoldersOf(tree);
   const where = {};
-  const walk = (items, label) => {
+  const walk = (items, label, sub) => {
     for (const i of items) {
-      if (i.type === "folder") walk(i.items || [], label);
-      else if (i.type === "playlist") where[i.uri] = { label, name: i.name };
+      if (i.type === "folder") walk(i.items || [], label, sub || i.name);
+      else if (i.type === "playlist") where[i.uri] = { label, sub, name: i.name };
     }
   };
-  for (const { label, folder } of folders) walk(folder.items || [], label);
+  for (const { label, folder } of folders) walk(folder.items || [], label, null);
 
   const pins = new Set(window.AccueilCore?.readPins?.() || []);
   const loose = tree.items.filter((i) => i.type === "playlist" && !pins.has(i.uri) && !SEASON_NAME.test((i.name || "").trim()));
   const uris = [...Object.keys(where), ...loose.map((i) => i.uri)];
-  const artistsOf = {};
+  const artistsOf = {}, artistNames = {};
   let done = 0;
   onProgress?.({ done, total: uris.length });
   await pool(uris, 6, async (uri) => {
-    try { artistsOf[uri] = [...new Set(await trackArtists(uri, 150))]; } catch { artistsOf[uri] = []; }
+    try {
+      const r = await P.PlaylistAPI.getContents(uri, { limit: 150 });
+      const set = new Set();
+      for (const t of r.items || []) for (const a of t.artists || []) if (a.uri) { set.add(a.uri); artistNames[a.uri] = a.name; }
+      artistsOf[uri] = [...set];
+    } catch { artistsOf[uri] = []; }
     done += 1;
     if (done % 10 === 0) onProgress?.({ done, total: uris.length });
   });
@@ -928,26 +1122,80 @@ async function analyzeLibrary(onProgress) {
     .filter((i) => i.lastPlayedAt && Date.parse(i.lastPlayedAt) < yearAgo && !skip.has(i.uri) && !pins.has(i.uri))
     .map((i) => ({ uri: i.uri, name: i.name, last: i.lastPlayedAt }));
   const images = Object.fromEntries(playlists.map((i) => [i.uri, i.images?.[0]?.url || null]));
-  for (const list of [misplaced, toFile, dormant]) for (const x of list) x.img = images[x.uri] || null;
+  // Les playlists qu'on propose de changer de style restent hors des sous-dossiers de leur dossier actuel.
+  const moving = new Set(misplaced.map((x) => x.uri));
+  const { newSubs, joins } = refineFolders(folders, Object.fromEntries(Object.entries(where).filter(([u]) => !moving.has(u))), artistsOf, artistNames);
+  for (const list of [misplaced, toFile, dormant, joins]) for (const x of list) x.img = images[x.uri] || null;
+  for (const p of newSubs) for (const m of p.members) m.img = images[m.uri] || null;
   return {
     misplaced: misplaced.sort((a, b) => b.share - a.share),
     toFile,
+    newSubs,
+    joins,
     dormant,
     undated: playlists.filter((i) => !i.lastPlayedAt).length,
   };
 }
 
 // Mise à jour de l'index des styles après un déplacement (sinon il attendrait sa reconstruction hebdo).
-function restyle(uri, label) {
+function restyle(uri, label, sub) {
+  styleFoldersPromise = null;
   const idx = lsGet(STYLE_KEY);
   if (!idx?.playlists) return;
   if (label) idx.playlists[uri] = label; else delete idx.playlists[uri];
+  if (idx.subs) { if (sub) idx.subs[uri] = sub; else delete idx.subs[uri]; }
   lsSet(STYLE_KEY, idx);
   styleIndexPromise = null;
 }
 
+// Proposition de sous-dossier : nom modifiable, playlists à retirer d'un clic avant de créer.
+function RefineProposal({ p, onCreated, onIgnore }) {
+  const [name, setName] = useState(p.name);
+  const [off, setOff] = useState(() => new Set());
+  const [busy, setBusy] = useState(false);
+  const kept = p.members.filter((m) => !off.has(m.uri));
+  const create = async () => {
+    const title = name.trim();
+    setBusy(true);
+    try {
+      const R = Spicetify.Platform.RootlistAPI;
+      const { uri } = await R.createFolder(title, { after: { uri: p.folderUri } });
+      if (!uri) throw new Error(tr("dossier non créé"));
+      const moved = new Set(await moveAll(kept.map((m) => m.uri), uri));
+      const ok = kept.filter((m) => moved.has(m.uri));
+      for (const m of ok) restyle(m.uri, p.label, title);
+      if (ok.length < kept.length) notify(tr("Sous-dossier « {name} » créé, mais {n} playlists n'ont pas pu y être déplacées", { name: title, n: kept.length - ok.length }), true);
+      else notify(tr("Sous-dossier « {name} » créé dans {label} ({n} playlists)", { name: title, label: p.label, n: ok.length }));
+      onCreated(ok);
+    } catch (e) { notify(tr("Rangement impossible : ") + errMsg(e), true); setBusy(false); }
+  };
+  const toggle = (uri) => { const next = new Set(off); next.has(uri) ? next.delete(uri) : next.add(uri); setOff(next); };
+  return h("div", { className: "acc-refine" },
+    h("div", { className: "acc-refine-head" },
+      h("input", { className: "acc-refine-name", value: name, maxLength: 80, "aria-label": tr("Nom du sous-dossier"), onChange: (e) => setName(e.target.value), onKeyDown: (e) => e.stopPropagation() }),
+      h("span", { className: "acc-sub acc-refine-where" }, tr("dans {label} · {n} playlists", { label: p.label, n: kept.length })),
+      h("button", { className: "acc-chip is-small", disabled: busy || !name.trim() || kept.length < 2, onClick: create }, busy ? "…" : tr("Créer le sous-dossier")),
+      h("button", { className: "acc-sort", onClick: onIgnore }, tr("Ignorer"))),
+    h("div", { className: "acc-refine-list" },
+      p.members.map((m) => h("button", { key: m.uri, className: "acc-refine-pl" + (off.has(m.uri) ? " is-off" : ""), title: off.has(m.uri) ? tr("Remettre dans la proposition") : tr("Retirer de la proposition"), onClick: () => toggle(m.uri) },
+        m.img ? h("img", { src: m.img, alt: "" }) : h("span", { className: "acc-refine-noimg" }),
+        h("span", null, m.name)))));
+}
+
+// RootlistAPI.move ne lève rien en cas d'échec (il émet seulement un événement) et refuse plusieurs
+// éléments à la fois (« Given row id does not exist ») : une playlist à la fois, puis vérification.
+// À l'envers pour garder l'ordre (chaque déplacement place en tête du dossier). Renvoie les déplacées.
+async function moveAll(uris, folderUri) {
+  const R = Spicetify.Platform.RootlistAPI;
+  for (const uri of [...uris].reverse()) await R.move([{ uri }], { after: { uri: folderUri } });
+  const find = (items) => { for (const i of items || []) { if (i.uri === folderUri) return i; const f = find(i.items); if (f) return f; } };
+  const inside = new Set();
+  (function walk(items) { for (const i of items || []) { inside.add(i.uri); walk(i.items); } })(find((await R.getContents({})).items)?.items);
+  return uris.filter((u) => inside.has(u));
+}
+
 async function moveToFolder(uri, folderUri) {
-  await Spicetify.Platform.RootlistAPI.move([{ uri }], { after: { uri: folderUri } });
+  if (!(await moveAll([uri], folderUri)).length) throw new Error(tr("Spotify a refusé le déplacement"));
 }
 
 async function archiveFolderUri() {
@@ -959,7 +1207,7 @@ async function archiveFolderUri() {
 function TidyPanel({ onClose }) {
   const [data, setData] = useState(() => {
     const c = lsGet(TIDY_KEY);
-    return c && Date.now() - c.at < TIDY_TTL ? c.data : null;
+    return c?.v === TIDY_V && Date.now() - c.at < TIDY_TTL ? c.data : null;
   });
   const [progress, setProgress] = useState(null);
   const [error, setError] = useState(null);
@@ -968,13 +1216,23 @@ function TidyPanel({ onClose }) {
   const run = () => {
     setError(null);
     setProgress({ done: 0, total: 0 });
-    analyzeLibrary(setProgress).then((d) => { lsSet(TIDY_KEY, { at: Date.now(), data: d }); setData(d); setProgress(null); },
+    analyzeLibrary(setProgress).then((d) => { lsSet(TIDY_KEY, { v: TIDY_V, at: Date.now(), data: d }); setData(d); setProgress(null); },
       (e) => { setError(errMsg(e)); setProgress(null); });
   };
   useEffect(() => { if (!data) run(); }, []);
   const ignore = (uri) => { const next = new Set(ignored).add(uri); setIgnored(next); lsSet(TIDY_IGNORED, [...next]); };
+  // Ce qui est fait sort aussi de l'analyse gardée en cache, sinon ça reviendrait à la réouverture.
+  const finish = (keys) => {
+    setDone((d) => { const next = new Set(d); for (const k of keys) next.add(k); return next; });
+    const c = lsGet(TIDY_KEY);
+    if (!c?.data) return;
+    const gone = new Set(keys);
+    for (const k of ["misplaced", "toFile", "dormant", "joins"]) c.data[k] = (c.data[k] || []).filter((x) => !gone.has(x.uri));
+    c.data.newSubs = (c.data.newSubs || []).filter((p) => !gone.has(p.id)).map((p) => ({ ...p, members: p.members.filter((m) => !gone.has(m.uri)) }));
+    lsSet(TIDY_KEY, c);
+  };
   const act = async (item, fn, msg) => {
-    try { await fn(); setDone(new Set(done).add(item.uri)); notify(msg); } catch (e) { notify(tr("Rangement impossible : ") + errMsg(e), true); }
+    try { await fn(); finish([item.uri]); notify(msg); } catch (e) { notify(tr("Rangement impossible : ") + errMsg(e), true); }
   };
   const visible = (list) => (list || []).filter((x) => !ignored.has(x.uri) && !done.has(x.uri));
   const pct = (x) => `${Math.round(x.share * 100)} %`;
@@ -986,7 +1244,7 @@ function TidyPanel({ onClose }) {
       h("div", { className: "acc-sub" }, reason)),
     action,
     h("button", { className: "acc-sort", onClick: () => ignore(x.uri) }, tr("Ignorer")));
-  const move = (x, label) => x.toFolder && h("button", { className: "acc-chip is-small", onClick: () => act(x, async () => { await moveToFolder(x.uri, x.toFolder); restyle(x.uri, x.to); }, tr("« {name} » rangée dans {label}", { name: x.name, label })) }, tr("Déplacer vers {label}", { label }));
+  const move = (x, label) => x.toFolder && h("button", { className: "acc-chip is-small", onClick: () => act(x, async () => { await moveToFolder(x.uri, x.toFolder); restyle(x.uri, x.to || x.from, x.sub); }, tr("« {name} » rangée dans {label}", { name: x.name, label })) }, tr("Déplacer vers {label}", { label }));
   const group = (title, items, render) => items.length > 0 && h("div", { className: "acc-tidy-group" }, h("h3", null, `${title} · ${items.length}`), items.map(render));
 
   let body;
@@ -994,10 +1252,16 @@ function TidyPanel({ onClose }) {
   else if (progress) body = h("div", { className: "acc-hint" }, tr("Analyse de ta bibliothèque… {done}/{total} playlists", { done: progress.done, total: progress.total || "…" }));
   else if (data) {
     const misplaced = visible(data.misplaced), toFile = visible(data.toFile), dormant = visible(data.dormant);
+    const newSubs = (data.newSubs || []).filter((p) => !ignored.has(p.id) && !done.has(p.id));
+    const joins = visible(data.joins);
     body = h(React.Fragment, null,
-      !misplaced.length && !toFile.length && !dormant.length && h("div", { className: "acc-sub" }, tr("Rien à ranger : ta bibliothèque est en ordre.")),
+      !misplaced.length && !toFile.length && !dormant.length && !newSubs.length && !joins.length && h("div", { className: "acc-sub" }, tr("Rien à ranger : ta bibliothèque est en ordre.")),
       group(tr("Mal rangées"), misplaced, (x) => row(x, tr("Rangée dans {from}, mais {pct} de ses artistes ({known} reconnus sur {total}) relèvent de {to}", { from: x.from, pct: pct(x), known: x.known, total: x.total, to: x.to }), move(x, x.to))),
       group(tr("En vrac"), toFile, (x) => row(x, tr("À la racine ; {pct} de ses artistes ({known} reconnus sur {total}) relèvent de {to}", { pct: pct(x), known: x.known, total: x.total, to: x.to }), move(x, x.to))),
+      group(tr("Sous-dossiers à créer"), newSubs, (p) => h(RefineProposal, { key: p.id, p,
+        onCreated: (moved) => finish([p.id, ...moved.map((m) => m.uri)]),
+        onIgnore: () => ignore(p.id) })),
+      group(tr("À ranger dans un sous-dossier"), joins, (x) => row(x, tr("À la racine de {from}, proche du sous-dossier {sub}", { from: x.from, sub: x.sub }), move(x, x.sub))),
       group(tr("Pas écoutées depuis plus d'un an"), dormant, (x) => row(x, tr("Dernière écoute : {date}", { date: new Date(x.last).toLocaleDateString(LOCALE, { month: "long", year: "numeric" }) }),
         h("button", { className: "acc-chip is-small", onClick: () => act(x, async () => { await moveToFolder(x.uri, await archiveFolderUri()); restyle(x.uri, null); }, tr("« {name} » archivée dans {folder}", { name: x.name, folder: ARCHIVE_FOLDER })) }, tr("Archiver")))),
       data.undated > 0 && h("div", { className: "acc-hint acc-tidy-note" }, tr(data.undated > 1 ? "Spotify ne garde pas de date d'écoute pour {n} playlists : celles qui dorment ne peuvent pas toutes être repérées." : "Spotify ne garde pas de date d'écoute pour {n} playlist : celles qui dorment ne peuvent pas toutes être repérées.", { n: data.undated })));
@@ -1016,29 +1280,32 @@ function MyPlaylists() {
   const state = useAsync(fetchPlaylists, []);
   const [sort, setSort] = useState("top");
   const [style, setStyle] = useState("all");
+  const [sub, setSub] = useState("all");
   const [tidy, setTidy] = useState(false);
   const plays = usePlays();
-  const { styles, progress, names } = useStyles(state.data);
+  const { styles, also, subs, progress, names } = useStyles(state.data);
   const sorted = useMemo(() => {
     const list = withPlays(state.data || [], plays);
     if (sort === "az") return list.sort(byName);
     if (sort === "recent") return list.sort(byRecent);
     return list.sort((a, b) => b.n - a.n || byRecent(a, b));
   }, [state.data, sort, plays]);
-  const shown = sorted.filter(byStyle(style, styles));
+  const inStyle = sorted.filter(byStyle(style, styles, also));
+  const shown = style === "all" ? inStyle : inStyle.filter(bySub(style, sub, styles, subs));
   const since = plays._since ? new Date(plays._since).toLocaleDateString(LOCALE) : null;
   const sorts = PLAYLIST_SORTS.map((o) => (o.id === "top" ? { ...o, title: since ? tr("Écoutes comptées depuis le {since}, tous appareils (une écoute = un lancement), puis par écoute récente", { since }) : tr("Par écoute récente, en attendant le nombre d'écoutes") } : o));
 
   return h(Status, { state }, () =>
     h("section", { className: "acc-section" },
       h(Toolbar, null,
-        h(StyleBar, { items: sorted, styles, names, progress, value: style, onChange: setStyle }),
+        h(StyleBar, { items: sorted, styles, also, names, progress, value: style, onChange: (st) => { setStyle(st); setSub("all"); } }),
         h("div", { className: "acc-sorts" },
           h(Sorts, { options: sorts, value: sort, onChange: setSort }),
-          h("button", { className: "acc-sort" + (tidy ? " is-on" : ""), title: tr("Playlists mal rangées, en vrac ou en sommeil"), onClick: () => setTidy(!tidy) }, tr("Ranger")))),
+          h("button", { className: "acc-sort" + (tidy ? " is-on" : ""), title: tr("Playlists mal rangées, en vrac ou en sommeil, sous-dossiers à créer"), onClick: () => setTidy(!tidy) }, tr("Ranger")))),
+      style !== "all" && h(SubBar, { items: inStyle, style, styles, subs, value: sub, onChange: setSub }),
       tidy && h(TidyPanel, { onClose: () => setTidy(false) }),
       h("div", { className: "acc-cols" },
-        COLUMNS.map((c) => h(Column, { key: c.id + sort + style, id: c.id, label: c.label, items: shown.filter((p) => p.group === c.id) })))));
+        COLUMNS.map((c) => h(Column, { key: c.id + sort + style + sub, id: c.id, label: c.label, items: shown.filter((p) => p.group === c.id) })))));
 }
 
 const ALBUM_SORTS = [
@@ -1056,7 +1323,7 @@ function MyAlbums() {
   const [sort, setSort] = useState("recent");
   const [style, setStyle] = useState("all");
   const plays = usePlays();
-  const { styles, progress, names } = useStyles(state.data);
+  const { styles, also, progress, names } = useStyles(state.data);
   const byRelease = sort.startsWith("release");
   const datesProgress = useAlbumDates(state.data, byRelease);
   const sorted = useMemo(() => {
@@ -1072,11 +1339,11 @@ function MyAlbums() {
     if (sort === "artist") return list.sort((a, b) => a.artist.localeCompare(b.artist, "fr", { sensitivity: "base" }) || byName(a, b));
     return list.sort(byRecent);
   }, [state.data, sort, plays, datesProgress]);
-  const shown = sorted.filter(byStyle(style, styles));
+  const shown = sorted.filter(byStyle(style, styles, also));
   return h(Status, { state }, () =>
     h("section", { className: "acc-section" },
       h(Toolbar, null,
-        h(StyleBar, { items: sorted, styles, names, progress, value: style, onChange: setStyle }),
+        h(StyleBar, { items: sorted, styles, also, names, progress, value: style, onChange: setStyle }),
         h(Sorts, { options: ALBUM_SORTS, value: sort, onChange: setSort })),
       datesProgress && h("div", { className: "acc-hint acc-note" }, tr("Lecture des dates de sortie… {done}/{total} (une seule fois)", datesProgress)),
       h(SectionlessGrid, { key: sort + style, items: shown })));
@@ -1102,12 +1369,12 @@ function HomeSections({ facet, tab, tabs }) {
 
 function StyledSections({ sections, limit }) {
   const all = useMemo(() => sections.flatMap((s) => s.items), [sections]);
-  const { styles, progress, names } = useStyles(all);
+  const { styles, also, progress, names } = useStyles(all);
   const [style, setStyle] = useState("all");
-  const keep = byStyle(style, styles);
+  const keep = byStyle(style, styles, also);
   const filtered = sections.map((s) => ({ ...s, items: s.items.filter(keep) })).filter((s) => s.items.length);
   return h(React.Fragment, null,
-    h(Toolbar, null, h(StyleBar, { items: all, styles, names, progress, value: style, onChange: setStyle })),
+    h(Toolbar, null, h(StyleBar, { items: all, styles, also, names, progress, value: style, onChange: setStyle })),
     filtered.length ? filtered.map((s) => h(Section, { key: s.title + style, title: s.title, items: s.items, limit })) : h("div", { className: "acc-empty" }, tr("Rien dans ce style ici.")));
 }
 
@@ -1592,6 +1859,18 @@ header[data-testid="topbar"] { display: none !important; }
 .acc-tidy-name { font-weight: 600; cursor: pointer; color: inherit; }
 .acc-tidy-name:hover { text-decoration: underline; }
 .acc-tidy-note { margin-top: 14px; }
+.acc-refine { padding: 10px 8px 12px; border-radius: 6px; }
+.acc-refine + .acc-refine { border-top: 1px solid rgba(255,255,255,.06); }
+.acc-refine-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.acc-refine-name { flex: 0 1 260px; min-width: 140px; padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.25); color: var(--acc-text); font: inherit; font-weight: 600; }
+.acc-refine-name:focus { outline: none; border-color: var(--acc-green); }
+.acc-refine-where { flex: 1; min-width: 120px; }
+.acc-refine-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.acc-refine-pl { display: inline-flex; align-items: center; gap: 6px; max-width: 220px; padding: 3px 10px 3px 3px; border: 0; border-radius: 4px; background: var(--acc-chip); color: var(--acc-text); font-size: .8125rem; cursor: pointer; }
+.acc-refine-pl:hover { background: var(--acc-chip-hover); }
+.acc-refine-pl img, .acc-refine-noimg { width: 22px; height: 22px; flex: none; border-radius: 3px; object-fit: cover; background: #282828; }
+.acc-refine-pl span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acc-refine-pl.is-off { opacity: .4; text-decoration: line-through; }
 .acc-slot { display: flex; align-items: center; gap: 14px; padding: 8px 10px 8px 8px; flex: 0 1 300px; min-width: 0; border-radius: 8px; border: 1.5px dashed rgba(255,255,255,.22); color: var(--acc-sub); cursor: help; }
 .acc-slot:hover { border-color: rgba(255,255,255,.45); color: var(--acc-text); }
 .acc-slot-plus { width: 56px; height: 56px; flex: none; border-radius: 4px; display: grid; place-items: center; border: 1.5px dashed rgba(255,255,255,.22); font-size: 1.5rem; font-weight: 300; }
@@ -1609,6 +1888,10 @@ header[data-testid="topbar"] { display: none !important; }
 button.acc-schip { padding: 5px 12px; }
 .acc-schip:hover { background: var(--acc-chip-hover); }
 .acc-schip.is-on { background: var(--acc-text); color: #000; }
+.acc-subs { margin: -4px 0 18px; }
+.acc-schip.is-sub { background: transparent; box-shadow: inset 0 0 0 1px rgba(255,255,255,.16); }
+.acc-schip.is-sub:hover { background: var(--acc-chip); }
+.acc-schip.is-sub.is-on { background: var(--acc-text); box-shadow: none; }
 .acc-schip-label { background: none; border: 0; color: inherit; font: inherit; padding: 5px 12px 5px 6px; cursor: pointer; }
 .acc-schip-label:first-child { padding-left: 12px; }
 .acc-chip-n { margin-left: 6px; color: var(--acc-sub); font-variant-numeric: tabular-nums; }
