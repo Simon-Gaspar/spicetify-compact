@@ -150,7 +150,11 @@ const EN = {
   "Seuls les titres peuvent être likés": "Only tracks can be liked",
   "Déjà dans les titres likés": "Already in Liked Songs",
   "Déjà liké": "Already liked",
-  "Tous": "All"
+  "Tous": "All",
+  "Nouvelle version du thème : {latest}": "New theme version: {latest}",
+  " (installée : {current}). ": " (installed: {current}). ",
+  "Récupère la dernière version sur ": "Get the latest version on ",
+  " et relance le script d'installation. ": " and run the install script again. "
 };
 function tr(fr, vars) {
   let text = LANG === "en" && EN[fr] !== undefined ? EN[fr] : fr;
@@ -632,6 +636,29 @@ function HealthBanner() {
     tr(" Certaines fonctions peuvent ne plus marcher ({list}). Mets à jour le thème depuis ", { list: missing.join(", ") }),
     h("a", { href: "https://github.com/Simon-Gaspar/spicetify-compact" }, "github.com/Simon-Gaspar/spicetify-compact"),
     tr(", ou attends une mise à jour de Spicetify."));
+}
+
+// Avis de mise à jour (vérifié par l'extension) : masquable pour la version annoncée.
+function UpdateBanner() {
+  const read = () => window.AccueilCore?.update || null;
+  const [update, setUpdate] = useState(read);
+  const [hidden, setHidden] = useState(() => lsGet("accueil:update-dismissed"));
+  useEffect(() => {
+    const refresh = () => setUpdate(read());
+    window.addEventListener("accueil:update", refresh);
+    return () => window.removeEventListener("accueil:update", refresh);
+  }, []);
+  if (!update?.available || hidden === update.latest.version) return null;
+  const dismiss = () => { lsSet("accueil:update-dismissed", update.latest.version); setHidden(update.latest.version); };
+  const notes = update.latest.notes?.[LANG] || update.latest.notes?.en || "";
+  return h("div", { className: "acc-alert acc-update" },
+    h("strong", null, tr("Nouvelle version du thème : {latest}", { latest: update.latest.version })),
+    tr(" (installée : {current}). ", { current: update.current }),
+    notes && h("span", null, notes + " "),
+    tr("Récupère la dernière version sur "),
+    h("a", { href: LANG === "fr" ? "https://github.com/Simon-Gaspar/spicetify-compact/blob/main/README.fr.md#mettre-à-jour" : "https://github.com/Simon-Gaspar/spicetify-compact#update" }, "GitHub"),
+    tr(" et relance le script d'installation. "),
+    h("button", { className: "acc-link", onClick: dismiss }, tr("Plus tard")));
 }
 
 // ---------- composants ----------
@@ -1479,6 +1506,7 @@ function AccueilApp() {
   return h("div", { className: "acc-page" },
     h("style", null, CSS),
     h(HealthBanner),
+    h(UpdateBanner),
     h("header", { className: "acc-header" },
       h("nav", { className: "acc-main-tabs" },
         MAIN_TABS.map((m) =>
@@ -1568,6 +1596,8 @@ header[data-testid="topbar"] { display: none !important; }
 .acc-slot:hover { border-color: rgba(255,255,255,.45); color: var(--acc-text); }
 .acc-slot-plus { width: 56px; height: 56px; flex: none; border-radius: 4px; display: grid; place-items: center; border: 1.5px dashed rgba(255,255,255,.22); font-size: 1.5rem; font-weight: 300; }
 .acc-slot .acc-liked-title { color: inherit; }
+.acc-update { background: rgba(30,215,96,.12); color: #c9f5da; }
+.acc-update a { color: #fff; }
 .acc-pin-hint { display: flex; align-items: center; max-width: 320px; padding: 10px 14px; border: 1px dashed rgba(255,255,255,.2); border-radius: 8px; color: var(--acc-sub); font-size: .8125rem; }
 /* Une seule ligne, toujours : 3 cartes (2 épingles + Titres likés), qui rétrécissent au besoin. */
 .acc-heroes { display: flex; gap: 12px; flex-wrap: nowrap; justify-content: flex-end; flex: 1 1 auto; min-width: 0; }

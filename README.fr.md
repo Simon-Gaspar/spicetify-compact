@@ -64,6 +64,10 @@ Le script installe Spicetify s'il manque, copie le thème, les deux pages et les
 
 Revenir au Spotify d'origine : `spicetify restore`.
 
+**Avis de mise à jour** : une fois par jour, le thème lit `version.json` sur ce dépôt (rien d'autre n'est téléchargé ni exécuté). Quand une version plus récente est publiée, un bandeau le signale en haut de l'accueil ; « Plus tard » le masque pour cette version.
+
+**Publier une nouvelle version** (mainteneur) : passer `ACCUEIL_VERSION` en tête de `spicetify/Extensions/accueil-core.js` et `version` dans `version.json` au même numéro, avec éventuellement une courte note dans `version.json` (`notes.fr` / `notes.en`), puis pousser.
+
 ## À adapter à ta bibliothèque
 
 - **Styles** : sans dossiers, pas de filtres par style (une astuce le rappelle) — tout le reste fonctionne. Un style = un dossier de premier niveau de ta bibliothèque, détecté automatiquement (sauf `SAISONS`). Les albums, mix et découvertes sont classés d'après leurs artistes, et ce qui ne rentre dans aucun style va dans « Mixte ». Pour ne garder que certains dossiers ou changer leur nom affiché, édite `STYLE_LABELS` au début de `CustomApps/accueil/index.js` (dans `%APPDATA%\spicetify` sous Windows, `~/.config/spicetify` sur Mac), puis `spicetify apply` : dès qu'un dossier de cette liste existe, seuls ceux de la liste comptent. L'analyse est refaite chaque semaine.

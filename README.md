@@ -79,6 +79,10 @@ The script installs Spicetify if needed, copies the theme, both pages and the ex
 
 Back to stock Spotify: `spicetify restore`.
 
+**Update notice**: once a day, the theme reads `version.json` from this repo (nothing else is downloaded or run). When a newer version is out, a banner at the top of the home page says so; *Later* hides it for that version.
+
+**Publishing a new version** (maintainer): bump `ACCUEIL_VERSION` at the top of `spicetify/Extensions/accueil-core.js` and `version` in `version.json` to the same number, optionally with a short note in `version.json` (`notes.en` / `notes.fr`), then push.
+
 ## Adapting it to your library
 
 - **Styles**: one style = one top-level folder in your library, detected automatically (except `SAISONS`).

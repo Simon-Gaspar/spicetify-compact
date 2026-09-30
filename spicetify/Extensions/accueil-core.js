@@ -8,10 +8,14 @@
 //    et range la saison précédente dans le dossier SAISONS. Une seule fois par saison.
 // 4. N'active le CSS compact du panneau (thème Compact) que si le patch 64 → 48 px est en place.
 // 6. « Écouter plus tard » et « Discographie complète » dans le menu clic droit.
+// 9. Avis de mise à jour : compare ACCUEIL_VERSION à version.json du dépôt GitHub (une fois par jour).
 // 8. Épingles de l'accueil : playlists, albums, dossiers, artistes ou émissions affichés en haut
 //    de la page, choisis au clic droit (« Épingler sur l'accueil »).
 // 5. Vérifie les API internes de Spotify dont dépend le thème et signale celles qui manquent
 //    (elles changent parfois avec les mises à jour de Spotify).
+// Version installée du thème : à incrémenter avec version.json à la racine du dépôt à chaque publication.
+const ACCUEIL_VERSION = "1.0.0";
+
 // Langue : français si Spotify est en français, anglais sinon ; accueil:lang ("fr" | "en") force une
 // langue. Calculée à chaque appel (Spicetify.Locale n'est pas toujours prêt au démarrage).
 const ACCUEIL_EN = {
@@ -430,6 +434,32 @@ function accueilT(fr, vars) {
       .catch(warn("épingles"));
   }
 
-  Object.assign(window.AccueilCore, { readLater, addLater, removeLater, inLater, findItemMenu, describe, readPins, pinUri, unpinUri, isPinned,
+  // ---------- 9. avis de mise à jour ----------
+  // Ne lit que version.json (rien n'est téléchargé ni exécuté) ; l'accueil affiche un bandeau si la
+  // version publiée est plus récente. Résultat gardé un jour (accueil:update).
+  const VERSION_URL = "https://raw.githubusercontent.com/Simon-Gaspar/spicetify-compact/main/version.json";
+  const newer = (a, b) => {
+    const pa = String(a).split(".").map(Number), pb = String(b).split(".").map(Number);
+    for (let i = 0; i < 3; i++) { if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0); }
+    return false;
+  };
+  const publishUpdate = (latest) => {
+    window.AccueilCore.update = { current: ACCUEIL_VERSION, latest, available: !!latest?.version && newer(latest.version, ACCUEIL_VERSION) };
+    window.dispatchEvent(new Event("accueil:update"));
+  };
+  (async () => {
+    let cached = null;
+    try { cached = JSON.parse(Spicetify.LocalStorage.get("accueil:update") || "null"); } catch {}
+    if (cached && Date.now() - cached.at < 86400000) return publishUpdate(cached.latest);
+    try {
+      const r = await fetch(VERSION_URL, { cache: "no-store" });
+      if (!r.ok) return;
+      const latest = await r.json();
+      Spicetify.LocalStorage.set("accueil:update", JSON.stringify({ at: Date.now(), latest }));
+      publishUpdate(latest);
+    } catch (e) { warn("mise à jour")(e); }
+  })();
+
+  Object.assign(window.AccueilCore, { version: ACCUEIL_VERSION, readLater, addLater, removeLater, inLater, findItemMenu, describe, readPins, pinUri, unpinUri, isPinned,
     setPins: (list) => { if (Array.isArray(list) && list.every((u) => typeof u === "string")) writePins(list); } });
 })();
