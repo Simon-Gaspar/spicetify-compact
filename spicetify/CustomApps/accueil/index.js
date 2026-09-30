@@ -169,7 +169,11 @@ const EN = {
   "Nouvelle version du thème : {latest}": "New theme version: {latest}",
   " (installée : {current}). ": " (installed: {current}). ",
   "Récupère la dernière version sur ": "Get the latest version on ",
-  " et relance le script d'installation. ": " and run the install script again. "
+  " et relance le script d'installation. ": " and run the install script again. ",
+  "Paramètres": "Settings",
+  "Séparer les playlists par propriétaire": "Split playlists by owner",
+  "Mes playlists en trois colonnes : les tiennes, celles des autres, celles de Spotify. Désactivé : une seule grille.": "My playlists in three columns: yours, other people's, Spotify's. Off: a single grid.",
+  "Toutes les playlists": "All playlists"
 };
 function tr(fr, vars) {
   let text = LANG === "en" && EN[fr] !== undefined ? EN[fr] : fr;
@@ -223,6 +227,30 @@ function lsGet(key) {
 }
 function lsSet(key, value) {
   try { Spicetify.LocalStorage.set(key, JSON.stringify(value)); } catch {}
+}
+
+// ---------- paramètres ----------
+// Réglages de l'accueil (panneau Paramètres), gardés dans accueil:settings. Pour en ajouter un :
+// une valeur par défaut dans SETTINGS_DEFAULTS et une ligne dans SETTINGS.
+const SETTINGS_KEY = "accueil:settings";
+const SETTINGS_DEFAULTS = { splitPlaylists: true };
+const SETTINGS = [
+  { key: "splitPlaylists", label: "Séparer les playlists par propriétaire", desc: "Mes playlists en trois colonnes : les tiennes, celles des autres, celles de Spotify. Désactivé : une seule grille." },
+];
+const readSettings = () => ({ ...SETTINGS_DEFAULTS, ...(lsGet(SETTINGS_KEY) || {}) });
+// [réglages, set(patch)] ; tous les composants qui l'utilisent suivent le changement.
+function useSettings() {
+  const [settings, setSettings] = useState(readSettings);
+  useEffect(() => {
+    const refresh = () => setSettings(readSettings());
+    window.addEventListener("accueil:settings", refresh);
+    return () => window.removeEventListener("accueil:settings", refresh);
+  }, []);
+  const set = (patch) => {
+    lsSet(SETTINGS_KEY, { ...readSettings(), ...patch });
+    window.dispatchEvent(new Event("accueil:settings"));
+  };
+  return [settings, set];
 }
 
 async function pool(items, size, fn) {
@@ -916,12 +944,14 @@ function Tile({ card, showOwner }) {
     h("div", { className: "acc-tile-name" }, card.name)));
 }
 
+// id "all" : une seule grille (paramètre splitPlaylists désactivé), propriétaire en infobulle
+// pour les playlists qui ne sont pas à soi.
 function Column({ id, label, items }) {
   const [n, setN] = useState(60);
   return h("div", { className: "acc-col" },
     h("div", { className: "acc-col-head" }, h("h2", null, label), h("span", { className: "acc-count" }, items.length)),
     items.length
-      ? h("div", { className: "acc-tiles" }, items.slice(0, n).map((c) => h(Tile, { key: c.uri, card: c, showOwner: id === "others" })))
+      ? h("div", { className: "acc-tiles" }, items.slice(0, n).map((c) => h(Tile, { key: c.uri, card: c, showOwner: id === "others" || (id === "all" && c.group !== "self") })))
       : h("div", { className: "acc-sub" }, tr("Aucune playlist")),
     items.length > n && h("button", { className: "acc-link acc-col-more", onClick: () => setN(n + 120) }, tr("Afficher plus ({n})", { n: items.length - n })));
 }
@@ -1282,6 +1312,8 @@ function MyPlaylists() {
   const [style, setStyle] = useState("all");
   const [sub, setSub] = useState("all");
   const [tidy, setTidy] = useState(false);
+  const [settings] = useSettings();
+  const columns = settings.splitPlaylists ? COLUMNS : [{ id: "all", label: tr("Toutes les playlists") }];
   const plays = usePlays();
   const { styles, also, subs, progress, names } = useStyles(state.data);
   const sorted = useMemo(() => {
@@ -1305,7 +1337,7 @@ function MyPlaylists() {
       style !== "all" && h(SubBar, { items: inStyle, style, styles, subs, value: sub, onChange: setSub }),
       tidy && h(TidyPanel, { onClose: () => setTidy(false) }),
       h("div", { className: "acc-cols" },
-        COLUMNS.map((c) => h(Column, { key: c.id + sort + style + sub, id: c.id, label: c.label, items: shown.filter((p) => p.group === c.id) })))));
+        columns.map((c) => h(Column, { key: c.id + sort + style + sub, id: c.id, label: c.label, items: c.id === "all" ? shown : shown.filter((p) => p.group === c.id) })))));
 }
 
 const ALBUM_SORTS = [
@@ -1745,8 +1777,32 @@ const MAIN_TABS = [
   { id: "podcasts", label: tr("Podcasts & livres"), tabs: PODCAST_TABS, facet: "podcasts-chip" },
 ];
 
+function Switch({ on, label, onChange }) {
+  return h("button", { role: "switch", "aria-checked": on, "aria-label": label, className: "acc-switch" + (on ? " is-on" : ""), onClick: () => onChange(!on) },
+    h("span", { className: "acc-switch-knob" }));
+}
+
+function SettingsPanel({ onClose }) {
+  const [settings, set] = useSettings();
+  return h("div", { className: "acc-tidy acc-settings" },
+    h("div", { className: "acc-tidy-head" },
+      h("h2", null, tr("Paramètres")),
+      h("button", { className: "acc-sort", onClick: onClose }, tr("Fermer"))),
+    SETTINGS.map((o) => h("div", { key: o.key, className: "acc-setting" },
+      h("div", { className: "acc-setting-text" },
+        h("div", { className: "acc-setting-label" }, tr(o.label)),
+        h("div", { className: "acc-sub" }, tr(o.desc))),
+      h(Switch, { on: !!settings[o.key], label: tr(o.label), onChange: (v) => set({ [o.key]: v }) }))));
+}
+
+const SettingsIcon = () =>
+  h("svg", { viewBox: "0 0 24 24", width: 16, height: 16, fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" },
+    h("path", { d: "M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1" }),
+    h("circle", { cx: 15, cy: 6, r: 2 }), h("circle", { cx: 9, cy: 12, r: 2 }), h("circle", { cx: 17, cy: 18, r: 2 }));
+
 function AccueilApp() {
   const [main, setMain] = useState("music");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [sub, setSub] = useState({ music: "playlists", podcasts: "episodes" });
   const mainTab = MAIN_TABS.find((m) => m.id === main);
   const tabs = mainTab.tabs;
@@ -1781,7 +1837,9 @@ function AccueilApp() {
       h(PinnedHeroes, { main })),
     h("nav", { className: "acc-subnav" },
       tabs.map((t) => h("button", { key: t.id, className: "acc-chip" + (t.id === tab.id ? " is-on" : ""), onClick: () => setSub({ ...sub, [main]: t.id }) },
-        t.label, t.id === "later" && later.length > 0 && h("span", { className: "acc-chip-n" }, later.length)))),
+        t.label, t.id === "later" && later.length > 0 && h("span", { className: "acc-chip-n" }, later.length))),
+      h("button", { className: "acc-sort acc-settings-btn" + (settingsOpen ? " is-on" : ""), onClick: () => setSettingsOpen(!settingsOpen) }, h(SettingsIcon), tr("Paramètres"))),
+    settingsOpen && h(SettingsPanel, { onClose: () => setSettingsOpen(false) }),
     body);
 }
 
@@ -1814,7 +1872,16 @@ header[data-testid="topbar"] { display: none !important; }
 .acc-round:hover { transform: scale(1.06); }
 .acc-round.is-ghost { background: transparent; color: var(--acc-sub); }
 .acc-round.is-ghost:hover { color: var(--acc-text); }
-.acc-subnav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 28px; }
+.acc-subnav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 28px; }
+.acc-settings-btn { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+.acc-setting { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 10px 8px; border-radius: 6px; }
+.acc-setting:hover { background: var(--acc-chip); }
+.acc-setting-text { min-width: 0; }
+.acc-setting-label { font-weight: 600; font-size: .9375rem; }
+.acc-switch { position: relative; width: 40px; height: 22px; flex: none; padding: 0; border: 0; border-radius: 999px; background: rgba(255,255,255,.25); cursor: pointer; transition: background .15s; }
+.acc-switch.is-on { background: var(--acc-green); }
+.acc-switch-knob { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.acc-switch.is-on .acc-switch-knob { transform: translateX(18px); }
 .acc-chip { border: 0; border-radius: 999px; padding: 8px 16px; background: var(--acc-chip); color: var(--acc-text); font-size: .875rem; cursor: pointer; }
 .acc-chip:hover { background: var(--acc-chip-hover); }
 .acc-chip.is-on { background: var(--acc-text); color: #000; }

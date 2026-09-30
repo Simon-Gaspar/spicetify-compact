@@ -12,7 +12,7 @@ Pour **Spotify sur ordinateur, version téléchargée sur spotify.com** (pas cel
 
 ### Accueil
 - **Onglets Musique / Podcasts & livres**, avec un sous-menu chacun : Mes playlists, Mes albums, Plus tard, Mix pour moi, Nouveautés, Découvrir ; et côté podcasts : nouveaux épisodes, à reprendre, tes émissions, livres audio (les tiens et ceux proposés pour toi), découvrir. Fonctionne avec Spotify en français comme en anglais (une section non reconnue va dans « Découvrir » plutôt que de disparaître).
-- **Mes playlists en trois colonnes** : les tiennes, celles des autres, celles de Spotify.
+- **Mes playlists en trois colonnes** : les tiennes, celles des autres, celles de Spotify. Une seule grille si tu désactives « Séparer les playlists par propriétaire » dans **Paramètres** (au bout de la ligne des sous-onglets).
 - **Filtres par style** dans chaque sous-menu, avec un ▶ pour lancer tout un style en aléatoire. Les styles viennent de tes dossiers (voir [À adapter](#à-adapter-à-ta-bibliothèque)).
   - **Sous-filtres** : choisis un style, ses sous-dossiers apparaissent sur une deuxième ligne (Hip-hop › Trap US), chacun avec son ▶.
   - **Playlists mixtes** (deux styles nets, aucun majoritaire, par exemple rap + électro) : elles apparaissent sous les deux filtres, où qu'elles soient rangées.

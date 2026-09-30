@@ -14,7 +14,7 @@ For the **Spotify desktop app downloaded from spotify.com** (not the Microsoft S
 
 ### Home
 - **Music / Podcasts & books tabs**, each with its own sub-menu: my playlists, my albums, listen later, mixes for me, new releases, discover. On the podcast side: new episodes, resume, your shows, audiobooks (yours and suggested ones), discover. Any section the theme doesn't recognize lands in Discover instead of disappearing.
-- **My playlists in three columns**: yours, other people's, Spotify's.
+- **My playlists in three columns**: yours, other people's, Spotify's. A single grid if you turn off “Split playlists by owner” in **Settings** (at the end of the sub-tab row).
 - **Style filters** in every sub-menu, with a ▶ to shuffle a whole style. Styles come from your folders (see [Adapting it to your library](#adapting-it-to-your-library)).
   - **Sub-filters**: pick a style and its subfolders show up as a second row (Hip-hop › Trap US), each with its own ▶.
   - **Mixed playlists** (two clear styles, neither dominant, e.g. rap + electro) show up under both filters, wherever they're filed.
