@@ -9,7 +9,7 @@ Pour **Spotify sur ordinateur, version téléchargée sur spotify.com** (pas cel
 ## Ce que ça change
 
 ### Accueil
-- **Onglets Musique / Podcasts / Livres audio**, avec un sous-menu chacun : Mes playlists, Mes albums, Plus tard, Mix pour moi, Nouveautés, Découvrir ; pour les podcasts : nouveaux épisodes, à reprendre, tes émissions, découvrir ; pour les livres audio : les tiens et ceux proposés pour toi. Fonctionne avec Spotify en français comme en anglais (une section non reconnue va dans « Découvrir » plutôt que de disparaître).
+- **Onglets Musique / Podcasts & livres**, avec un sous-menu chacun : Mes playlists, Mes albums, Plus tard, Mix pour moi, Nouveautés, Découvrir ; et côté podcasts : nouveaux épisodes, à reprendre, tes émissions, livres audio (les tiens et ceux proposés pour toi), découvrir. Fonctionne avec Spotify en français comme en anglais (une section non reconnue va dans « Découvrir » plutôt que de disparaître).
 - **Mes playlists en trois colonnes** : les tiennes, celles des autres, celles de Spotify.
 - **Filtres par style** dans chaque sous-menu, avec un ▶ pour lancer tout un style en aléatoire. Les styles viennent de tes dossiers (voir [À adapter](#à-adapter-à-ta-bibliothèque)).
 - **Nombre d'écoutes** sur chaque playlist et chaque album, et tri « Plus écoutées ».

@@ -165,12 +165,11 @@ const PODCAST_TABS = [
   { id: "episodes", label: "Nouveaux épisodes", match: /^(New episode|Nouvel épisode|Nouveaux épisodes)/i, merge: "Derniers épisodes de tes émissions" },
   { id: "resume", label: "Reprendre", match: /^(Catch up|Remettez-vous à jour|Rattrape|À rattraper|Reprendre)/i, merge: "À reprendre" },
   { id: "shows", label: "Mes podcasts", match: /^(Your shows|Vos émissions|Tes émissions)/i },
+  { id: "books", label: "Livres audio" },
   { id: "discover", label: "Découvrir", fallback: true, match: /(might like|Similar to|Popular with|pourriez aimer|pourraient vous plaire|pourrait te plaire|Similaire à|Populaire chez)/i },
 ];
-const AUDIOBOOK_TABS = [
-  { id: "mine", label: "Mes livres audio" },
-  { id: "discover", label: "Pour toi", fallback: true, match: /(Audiobooks for you|Livres audio pour|Popular with|Populaire chez|Based on your|Sur la base|interest in|intérêt)/i },
-];
+// Sections de la facette livres audio : toutes rangées sous « Livres audio » de l'onglet Podcasts.
+const AUDIOBOOK_TABS = [{ id: "books", label: "Livres audio", fallback: true }];
 
 const TITLES = [
   [/^Made For .+/, "Conçu pour toi"],
@@ -944,7 +943,7 @@ function usePath() {
 // dans l'ordre d'épinglage : rien de propre à une bibliothèque dans le code, chacun a les siens.
 // Liste tenue par l'extension accueil-core.js (au premier lancement : épingles de la bibliothèque).
 // Onglet Musique : playlists, albums, dossiers, artistes ; onglet Podcasts : épisodes, émissions.
-const PIN_GROUPS = { "your-episodes": "podcasts", show: "podcasts", episode: "podcasts", audiobook: "audiobooks" };
+const PIN_GROUPS = { "your-episodes": "podcasts", show: "podcasts", episode: "podcasts", audiobook: "podcasts" };
 const pinGroup = (item) => PIN_GROUPS[item.type] || "music";
 const TOP_RE = /all[- ]time top songs|de tous les temps/i;
 
@@ -1026,8 +1025,7 @@ function PinnedHeroes({ main }) {
   return h("div", { className: "acc-heroes" },
     shown.map((i) => h(PinHero, { key: i.uri, item: i })),
     pinned && !shown.length && h("div", { className: "acc-pin-hint" }, {
-      podcasts: "Clic droit sur une émission → « Épingler sur l'accueil » pour la retrouver ici.",
-      audiobooks: "Clic droit sur un livre audio → « Épingler sur l'accueil » pour le retrouver ici.",
+      podcasts: "Clic droit sur une émission ou un livre audio → « Épingler sur l'accueil » pour le retrouver ici.",
     }[main] || "Clic droit sur une playlist, un album ou un artiste → « Épingler sur l'accueil » pour le retrouver ici."),
     main === "music" && h(LikedHero));
 }
@@ -1040,22 +1038,26 @@ async function fetchAudiobooks() {
   }));
 }
 
-function MyAudiobooks() {
-  const state = useAsync(fetchAudiobooks, []);
-  return h(Status, { state }, () => state.data.length
-    ? h("section", { className: "acc-section" }, h(Grid, { items: state.data }))
-    : h("div", { className: "acc-empty" }, "Aucun livre audio dans ta bibliothèque. Regarde « Pour toi », ou ajoute-en depuis la recherche."));
+// Onglet Podcasts → Livres audio : les tiens, puis les suggestions de Spotify.
+function Audiobooks() {
+  const mine = useAsync(fetchAudiobooks, []);
+  const home = useAsync(() => fetchHome("audiobooks-chip"), []);
+  const suggested = useMemo(() => (home.data ? sectionsFor(AUDIOBOOK_TABS[0], AUDIOBOOK_TABS, home.data) : []), [home.data]);
+  return h(React.Fragment, null,
+    h(Status, { state: mine }, () => mine.data.length
+      ? h(Section, { title: "Mes livres audio", items: mine.data, limit: 12 })
+      : h("div", { className: "acc-hint acc-note" }, "Aucun livre audio dans ta bibliothèque : en voici quelques-uns pour toi.")),
+    h(Status, { state: home }, () => suggested.map((sec) => h(Section, { key: sec.title, title: sec.title, items: sec.items, limit: 12 }))));
 }
 
 const MAIN_TABS = [
   { id: "music", label: "Musique", tabs: MUSIC_TABS, facet: "music-chip" },
-  { id: "podcasts", label: "Podcasts", tabs: PODCAST_TABS, facet: "podcasts-chip" },
-  { id: "audiobooks", label: "Livres audio", tabs: AUDIOBOOK_TABS, facet: "audiobooks-chip" },
+  { id: "podcasts", label: "Podcasts & livres", tabs: PODCAST_TABS, facet: "podcasts-chip" },
 ];
 
 function AccueilApp() {
   const [main, setMain] = useState("music");
-  const [sub, setSub] = useState({ music: "playlists", podcasts: "episodes", audiobooks: "mine" });
+  const [sub, setSub] = useState({ music: "playlists", podcasts: "episodes" });
   const mainTab = MAIN_TABS.find((m) => m.id === main);
   const tabs = mainTab.tabs;
   const tab = tabs.find((t) => t.id === sub[main]);
@@ -1075,7 +1077,7 @@ function AccueilApp() {
   if (main === "music" && tab.id === "playlists") body = h(MyPlaylists);
   else if (main === "music" && tab.id === "later") body = h(Later);
   else if (main === "music" && tab.id === "albums") body = h(MyAlbums);
-  else if (main === "audiobooks" && tab.id === "mine") body = h(MyAudiobooks);
+  else if (main === "podcasts" && tab.id === "books") body = h(Audiobooks);
   else body = h(HomeSections, { key: main + tab.id, facet: mainTab.facet, tab, tabs });
 
   return h("div", { className: "acc-page" },
