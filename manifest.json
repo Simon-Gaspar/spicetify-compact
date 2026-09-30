@@ -21,5 +21,22 @@
       "minimal",
       "home"
     ]
+  },
+  {
+    "name": "Compact — Home & fullscreen",
+    "description": "Custom apps of the Compact theme: a home page (Music / Podcasts & books, playlists in three columns, style filters, pins, drag and drop to like or add) and a fullscreen view with synced lyrics and the queue. Install with install.sh / install.cmd (see README).",
+    "preview": "preview.png",
+    "readme": "README.md",
+    "authors": [
+      {
+        "name": "Simon Gaspar",
+        "url": "https://github.com/Simon-Gaspar"
+      }
+    ],
+    "tags": [
+      "home",
+      "fullscreen",
+      "lyrics"
+    ]
   }
 ]
