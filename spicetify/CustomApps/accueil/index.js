@@ -930,9 +930,10 @@ function StyledSections({ sections, limit }) {
     filtered.length ? filtered.map((s) => h(Section, { key: s.title + style, title: s.title, items: s.items, limit })) : h("div", { className: "acc-empty" }, "Rien dans ce style ici."));
 }
 
-function LikedHero() {
+function LikedHero({ reorder, drag }) {
   const [over, drop] = useDrop(likeTracks);
-  return h("div", { className: "acc-liked" + (over ? " is-drop" : ""), onClick: () => Spicetify.Platform.History.push("/collection/tracks"), ...drop },
+  const { handlers, cls } = pinDrag(LIKED_PIN, reorder, drag, drop);
+  return h("div", { className: "acc-liked" + (over ? " is-drop" : "") + cls, onClick: () => Spicetify.Platform.History.push("/collection/tracks"), title: "Titres likés — glisser pour réorganiser", ...handlers },
     h("div", { className: "acc-liked-art" }, h("svg", { viewBox: "0 0 24 24", width: 28, height: 28, fill: "#fff" }, h("path", { d: "M12 21s-7.5-4.6-9.6-9.2C.8 8.3 3 4.5 6.6 4.5c2.1 0 3.6 1.2 4.4 2.5.8-1.3 2.3-2.5 4.4-2.5 3.6 0 5.8 3.8 4.2 7.3C19.5 16.4 12 21 12 21z" }))),
     h("div", { className: "acc-liked-text" },
       h("div", { className: "acc-liked-title" }, "Titres likés"),
@@ -1116,7 +1117,7 @@ function usePath() {
 // Liste tenue par l'extension accueil-core.js (au premier lancement : épingles de la bibliothèque).
 // Onglet Musique : playlists, albums, dossiers, artistes ; onglet Podcasts : épisodes, émissions.
 const PIN_GROUPS = { "your-episodes": "podcasts", show: "podcasts", episode: "podcasts", audiobook: "podcasts" };
-const pinGroup = (item) => PIN_GROUPS[item.type] || "music";
+const pinGroup = (item) => PIN_GROUPS[item.type] || "music"; // Titres likés (type "liked") : musique
 const TOP_RE = /all[- ]time top songs|de tous les temps/i;
 
 function usePins() {
@@ -1136,6 +1137,7 @@ function usePins() {
       const byUri = new Map((r.items || []).map((i) => [i.uri, i]));
       const out = {};
       for (const uri of uris) {
+        if (uri === LIKED_PIN) continue;
         let it = byUri.get(uri);
         if (!it) {
           try {
@@ -1149,7 +1151,8 @@ function usePins() {
     })();
     return () => { alive = false; };
   }, [uris.join("|")]);
-  return meta && uris.map((u) => meta[u]).filter(Boolean);
+  const order = uris.includes(LIKED_PIN) ? uris : [...uris, LIKED_PIN];
+  return meta && order.map((u) => (u === LIKED_PIN ? { uri: LIKED_PIN, type: "liked" } : meta[u])).filter(Boolean);
 }
 
 function pinLabel(item) {
@@ -1180,6 +1183,30 @@ async function playPinned(item) {
 const PIN_DRAG = "application/x-accueil-pin";
 const isPinDrag = (e) => e.dataTransfer.types.includes(PIN_DRAG);
 
+// Titres likés : pseudo-épingle, rangée avec les autres (à la fin tant qu'on ne l'a pas déplacée).
+const LIKED_PIN = "accueil:liked";
+
+// Props de glisser-déposer d'une carte épinglée : réorganisation (type PIN_DRAG) et, si `drop` est
+// fourni, dépôt de titres Spotify sur la carte.
+function pinDrag(uri, reorder, drag, drop) {
+  const handlers = {
+    draggable: true,
+    onDragStart: (e) => { e.dataTransfer.setData(PIN_DRAG, uri); e.dataTransfer.effectAllowed = "move"; reorder.start(uri); },
+    onDragEnd: () => reorder.end(),
+    onDragOver: (e) => {
+      if (isPinDrag(e)) {
+        e.preventDefault();
+        const r = e.currentTarget.getBoundingClientRect();
+        reorder.over(uri, e.clientX < r.left + r.width / 2 ? "before" : "after");
+      } else drop?.onDragOver(e);
+    },
+    onDragLeave: (e) => drop?.onDragLeave(e),
+    onDrop: (e) => { if (isPinDrag(e)) { e.preventDefault(); reorder.drop(); } else drop?.onDrop(e); },
+  };
+  const cls = (drag?.uri === uri ? " is-dragging" : "") + (drag?.target === uri && drag.uri !== uri ? ` is-drop-${drag.side}` : "");
+  return { handlers, cls };
+}
+
 function PinHero({ item, reorder, drag }) {
   const [title, sub] = pinLabel(item);
   const droppable = item.type === "playlist" && item.isOwnedBySelf;
@@ -1187,22 +1214,8 @@ function PinHero({ item, reorder, drag }) {
   const img = item.images?.[0]?.url;
   const isSeason = sub === "Saison en cours";
   const open = () => (item.type === "your-episodes" ? Spicetify.Platform.History.push("/collection/your-episodes") : openUri(item.uri));
-  const handlers = {
-    draggable: true,
-    onDragStart: (e) => { e.dataTransfer.setData(PIN_DRAG, item.uri); e.dataTransfer.effectAllowed = "move"; reorder.start(item.uri); },
-    onDragEnd: () => reorder.end(),
-    onDragOver: (e) => {
-      if (isPinDrag(e)) {
-        e.preventDefault();
-        const r = e.currentTarget.getBoundingClientRect();
-        reorder.over(item.uri, e.clientX < r.left + r.width / 2 ? "before" : "after");
-      } else if (droppable) drop.onDragOver(e);
-    },
-    onDragLeave: (e) => { if (droppable) drop.onDragLeave(e); },
-    onDrop: (e) => { if (isPinDrag(e)) { e.preventDefault(); reorder.drop(); } else if (droppable) drop.onDrop(e); },
-  };
-  const cls = "acc-liked" + (over ? " is-drop" : "") + (drag?.uri === item.uri ? " is-dragging" : "") +
-    (drag?.target === item.uri && drag.uri !== item.uri ? ` is-drop-${drag.side}` : "");
+  const { handlers, cls: dragCls } = pinDrag(item.uri, reorder, drag, droppable ? drop : null);
+  const cls = "acc-liked" + (over ? " is-drop" : "") + dragCls;
   return withMenu(item.uri, h("div", { className: cls, onClick: open, title: `${item.name} — glisser pour réorganiser`, ...handlers },
     h("div", { className: "acc-liked-art" + (isSeason ? " is-season" : "") }, img ? h("img", { src: img, alt: "" }) : null),
     h("div", { className: "acc-liked-text" },
@@ -1223,7 +1236,8 @@ function PinnedHeroes({ main }) {
     drop: () => {
       const core = window.AccueilCore;
       if (drag?.target && drag.target !== drag.uri && core?.setPins) {
-        const list = (core.readPins() || []).filter((u) => u !== drag.uri);
+        const saved = core.readPins() || [];
+        const list = (saved.includes(LIKED_PIN) ? saved : [...saved, LIKED_PIN]).filter((u) => u !== drag.uri);
         let i = list.indexOf(drag.target);
         i = i < 0 ? list.length : i + (drag.side === "after" ? 1 : 0);
         list.splice(i, 0, drag.uri);
@@ -1233,11 +1247,11 @@ function PinnedHeroes({ main }) {
     },
   };
   return h("div", { className: "acc-heroes" },
-    shown.map((i) => h(PinHero, { key: i.uri, item: i, reorder, drag })),
-    pinned && !shown.length && h("div", { className: "acc-pin-hint" }, {
+    shown.map((i) => (i.type === "liked" ? h(LikedHero, { key: i.uri, reorder, drag }) : h(PinHero, { key: i.uri, item: i, reorder, drag }))),
+    pinned && !shown.some((i) => i.type !== "liked") && h("div", { className: "acc-pin-hint" }, {
       podcasts: "Clic droit sur une émission ou un livre audio → « Épingler sur l'accueil » pour le retrouver ici.",
     }[main] || "Clic droit sur une playlist, un album ou un artiste → « Épingler sur l'accueil » pour le retrouver ici."),
-    main === "music" && h(LikedHero));
+    !pinned && main === "music" && h(LikedHero, { reorder, drag }));
 }
 
 async function fetchAudiobooks() {

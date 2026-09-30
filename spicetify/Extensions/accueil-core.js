@@ -365,7 +365,8 @@
   }
   function pinUri(uri) {
     const list = readPins() || [];
-    if (!list.includes(uri)) writePins([...list, uri]);
+    // Titres likés (pseudo-épingle "accueil:liked") en dernier : la nouvelle épingle se place avant.
+    if (!list.includes(uri)) writePins(list.at(-1) === "accueil:liked" ? [...list.slice(0, -1), uri, "accueil:liked"] : [...list, uri]);
     Spicetify.showNotification?.("Épinglé sur l'accueil");
   }
   function unpinUri(uri) { writePins((readPins() || []).filter((u) => u !== uri)); }
