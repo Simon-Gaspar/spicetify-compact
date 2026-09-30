@@ -1,7 +1,7 @@
 [
   {
     "name": "Compact",
-    "description": "Custom home page (Music / Podcasts & books, playlists in three columns, style filters, pins), fullscreen playback with synced lyrics, listen later, full discography. Full install with install.sh / install.cmd.",
+    "description": "Custom home page (Music / Podcasts & books, playlists in three columns, style filters, 3 pins), fullscreen playback with synced lyrics, listen later, full discography, tidy-up suggestions. English and French. Full install with install.sh / install.cmd.",
     "preview": "preview.png",
     "readme": "README.md",
     "usercss": "spicetify/Themes/Compact/user.css",

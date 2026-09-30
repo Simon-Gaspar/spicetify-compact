@@ -5,6 +5,48 @@ const { React } = Spicetify;
 const { useState, useEffect, useRef } = React;
 const h = React.createElement;
 
+// ---------- langue ----------
+// tr() et pas t() : Spicetify emballe la custom app dans un module webpack (e, t, n) où t est
+// l'objet des exports ; une fonction t au premier niveau l'écraserait et la page ne s'afficherait plus.
+// Comme l'accueil : français si Spotify est en français, anglais sinon ; accueil:lang force une langue.
+const LANG = (() => {
+  try { const forced = Spicetify.LocalStorage.get("accueil:lang"); if (forced === "fr" || forced === "en") return forced; } catch {}
+  return String(Spicetify.Locale?.getLocale?.() || navigator.language || "en").toLowerCase().startsWith("fr") ? "fr" : "en";
+})();
+const EN = {
+  "Ajouter aux titres likés": "Add to Liked Songs",
+  "Retirer des titres likés": "Remove from Liked Songs",
+  "Aléatoire": "Shuffle",
+  "Chargement des paroles…": "Loading lyrics…",
+  "Dans ta file": "In your queue",
+  "Ensuite": "Next up",
+  "Fermer (Échap)": "Close (Esc)",
+  "Lecture": "Play",
+  "Paroles": "Lyrics",
+  "Paroles indisponibles pour le moment.": "Lyrics unavailable right now.",
+  "Pas de paroles pour ce titre.": "No lyrics for this track.",
+  "Passer à ce titre": "Skip to this track",
+  "Pause": "Pause",
+  "Précédent": "Previous",
+  "Suivant": "Next",
+  "Retirer de « Plus tard »": "Remove from Later",
+  "Écouter plus tard (sans liker)": "Listen later (without liking)",
+  "Rien en cours de lecture.": "Nothing playing.",
+  "Rien à suivre.": "Nothing up next.",
+  "Répéter": "Repeat",
+  "Répéter le titre": "Repeat track",
+  "Répétition désactivée": "Repeat off",
+  "À suivre": "Up next",
+  "Ensuite depuis {context}": "Next from {context}",
+  "Paroles : {provider}": "Lyrics: {provider}",
+  "Pas de paroles pour ce titre": "No lyrics for this track"
+};
+function tr(fr, vars) {
+  let text = LANG === "en" && EN[fr] !== undefined ? EN[fr] : fr;
+  if (vars) text = text.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
+  return text;
+}
+
 // ---------- état du lecteur ----------
 
 function snapshot() {
@@ -151,13 +193,13 @@ function Controls({ now }) {
   const P = Spicetify.Player;
   const btn = (title, icon, onClick, cls = "") => h("button", { className: "lec-ctl " + cls, title, onClick }, icon);
   return h("div", { className: "lec-controls" },
-    btn("Aléatoire", I.shuffle(), () => P.toggleShuffle(), now.shuffle ? "is-on" : ""),
-    btn("Précédent", I.prev(), () => P.back()),
-    btn(now.playing ? "Pause" : "Lecture", now.playing ? I.pause() : I.play(), () => P.togglePlay(), "is-main"),
-    btn("Suivant", I.next(), () => P.next()),
-    btn(now.repeat === 2 ? "Répéter le titre" : now.repeat === 1 ? "Répéter" : "Répétition désactivée", h(React.Fragment, null, I.repeat(), now.repeat === 2 && h("span", { className: "lec-one" }, "1")), () => P.toggleRepeat(), now.repeat ? "is-on" : ""),
-    btn(now.heart ? "Retirer des titres likés" : "Ajouter aux titres likés", I.heart(now.heart), () => P.toggleHeart(), "is-heart"),
-    window.AccueilCore?.addLater && btn(now.later ? "Retirer de « Plus tard »" : "Écouter plus tard (sans liker)", I.later(now.later),
+    btn(tr("Aléatoire"), I.shuffle(), () => P.toggleShuffle(), now.shuffle ? "is-on" : ""),
+    btn(tr("Précédent"), I.prev(), () => P.back()),
+    btn(now.playing ? tr("Pause") : tr("Lecture"), now.playing ? I.pause() : I.play(), () => P.togglePlay(), "is-main"),
+    btn(tr("Suivant"), I.next(), () => P.next()),
+    btn(now.repeat === 2 ? tr("Répéter le titre") : now.repeat === 1 ? tr("Répéter") : tr("Répétition désactivée"), h(React.Fragment, null, I.repeat(), now.repeat === 2 && h("span", { className: "lec-one" }, "1")), () => P.toggleRepeat(), now.repeat ? "is-on" : ""),
+    btn(now.heart ? tr("Retirer des titres likés") : tr("Ajouter aux titres likés"), I.heart(now.heart), () => P.toggleHeart(), "is-heart"),
+    window.AccueilCore?.addLater && btn(now.later ? tr("Retirer de « Plus tard »") : tr("Écouter plus tard (sans liker)"), I.later(now.later),
       () => (now.later ? window.AccueilCore.removeLater([now.item.uri]) : window.AccueilCore.addLater([now.item.uri]))));
 }
 
@@ -174,7 +216,7 @@ function UpNext({ now }) {
   const row = (t, i) => menu(t.uri, h("div", {
     key: t.uid || t.uri + i,
     className: "lec-row",
-    title: "Passer à ce titre",
+    title: tr("Passer à ce titre"),
     onClick: () => Spicetify.Platform.PlayerAPI.skipTo({ uri: t.uri, uid: t.uid }),
   },
     h("div", { className: "lec-row-img" }, t.img && h("img", { src: t.img, alt: "", loading: "lazy" })),
@@ -183,9 +225,9 @@ function UpNext({ now }) {
       h("div", { className: "lec-row-artist" }, t.artist)),
     h("span", { className: "lec-row-dur" }, t.duration ? fmt(t.duration) : "")));
   return h("div", { className: "lec-queue-list" },
-      queued.length > 0 && h(React.Fragment, null, h("div", { className: "lec-queue-label" }, "Dans ta file"), queued.map(row)),
-      rest.length > 0 && h(React.Fragment, null, h("div", { className: "lec-queue-label" }, now.context ? `Ensuite depuis ${now.context}` : "Ensuite"), rest.map(row)),
-      !now.next.length && h("div", { className: "lec-queue-empty" }, "Rien à suivre."));
+      queued.length > 0 && h(React.Fragment, null, h("div", { className: "lec-queue-label" }, tr("Dans ta file")), queued.map(row)),
+      rest.length > 0 && h(React.Fragment, null, h("div", { className: "lec-queue-label" }, now.context ? tr("Ensuite depuis {context}", { context: now.context }) : tr("Ensuite")), rest.map(row)),
+      !now.next.length && h("div", { className: "lec-queue-empty" }, tr("Rien à suivre.")));
 }
 
 function Lyrics({ now, state }) {
@@ -199,9 +241,9 @@ function Lyrics({ now, state }) {
     listRef.current?.querySelector(`[data-i="${active}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [active, state.uri]);
 
-  if (state.loading) return h("div", { className: "lec-queue-empty" }, "Chargement des paroles…");
-  if (state.error) return h("div", { className: "lec-queue-empty" }, "Paroles indisponibles pour le moment.");
-  if (!lyrics?.lines.length) return h("div", { className: "lec-queue-empty" }, "Pas de paroles pour ce titre.");
+  if (state.loading) return h("div", { className: "lec-queue-empty" }, tr("Chargement des paroles…"));
+  if (state.error) return h("div", { className: "lec-queue-empty" }, tr("Paroles indisponibles pour le moment."));
+  if (!lyrics?.lines.length) return h("div", { className: "lec-queue-empty" }, tr("Pas de paroles pour ce titre."));
 
   return h("div", { className: "lec-lyrics" + (lyrics.synced ? " is-synced" : ""), ref: listRef, onWheel: () => { pausedUntil.current = Date.now() + 4000; } },
     lyrics.lines.map((l, i) => h("p", {
@@ -210,7 +252,7 @@ function Lyrics({ now, state }) {
       className: "lec-line" + (i === active ? " is-active" : i < active ? " is-past" : ""),
       onClick: lyrics.synced ? () => { pausedUntil.current = 0; Spicetify.Player.seek(l.t); } : undefined,
     }, l.text || "♪")),
-    lyrics.provider && h("div", { className: "lec-lyrics-credit" }, `Paroles : ${lyrics.provider}`));
+    lyrics.provider && h("div", { className: "lec-lyrics-credit" }, tr("Paroles : {provider}", { provider: lyrics.provider })));
 }
 
 // Panneau de droite : Paroles ou À suivre. Sans paroles, on reste sur la file.
@@ -222,8 +264,8 @@ function SidePanel({ now }) {
   const shown = tab === "lyrics" && !noLyrics ? "lyrics" : "queue";
   return h("aside", { className: "lec-queue" },
     h("div", { className: "lec-tabs" },
-      h("button", { className: "lec-tab" + (shown === "lyrics" ? " is-on" : ""), disabled: noLyrics, title: noLyrics ? "Pas de paroles pour ce titre" : undefined, onClick: () => choose("lyrics") }, "Paroles"),
-      h("button", { className: "lec-tab" + (shown === "queue" ? " is-on" : ""), onClick: () => choose("queue") }, "À suivre")),
+      h("button", { className: "lec-tab" + (shown === "lyrics" ? " is-on" : ""), disabled: noLyrics, title: noLyrics ? tr("Pas de paroles pour ce titre") : undefined, onClick: () => choose("lyrics") }, tr("Paroles")),
+      h("button", { className: "lec-tab" + (shown === "queue" ? " is-on" : ""), onClick: () => choose("queue") }, tr("À suivre"))),
     shown === "lyrics" ? h(Lyrics, { now, state: lyricsState }) : h(UpNext, { now }));
 }
 
@@ -239,9 +281,9 @@ function LectureApp() {
     };
   }, []);
 
-  const closeButton = h("button", { className: "lec-close", title: "Fermer (Échap)", onClick: close }, I.close());
+  const closeButton = h("button", { className: "lec-close", title: tr("Fermer (Échap)"), onClick: close }, I.close());
 
-  if (!now.item) return h("div", { className: "lec" }, h("style", null, CSS), closeButton, h("div", { className: "lec-queue-empty" }, "Rien en cours de lecture."));
+  if (!now.item) return h("div", { className: "lec" }, h("style", null, CSS), closeButton, h("div", { className: "lec-queue-empty" }, tr("Rien en cours de lecture.")));
 
   return h("div", { className: "lec" },
     h("style", null, CSS),

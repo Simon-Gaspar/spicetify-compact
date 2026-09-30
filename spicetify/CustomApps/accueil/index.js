@@ -6,6 +6,158 @@ const { React } = Spicetify;
 const { useState, useEffect, useMemo } = React;
 const h = React.createElement;
 
+// ---------- langue ----------
+// tr() et pas t() : Spicetify emballe la custom app dans un module webpack (e, t, n) où t est
+// l'objet des exports ; une fonction t au premier niveau l'écraserait et la page ne s'afficherait plus.
+// Français si Spotify est en français, anglais sinon ; accueil:lang ("fr" | "en") force une langue.
+// Les textes sont écrits en français dans le code ; tr() renvoie la traduction anglaise (EN) si besoin,
+// et le texte tel quel s'il n'est pas traduit.
+const LANG = (() => {
+  try { const forced = Spicetify.LocalStorage.get("accueil:lang"); if (forced === "fr" || forced === "en") return forced; } catch {}
+  return String(Spicetify.Locale?.getLocale?.() || navigator.language || "en").toLowerCase().startsWith("fr") ? "fr" : "en";
+})();
+const LOCALE = LANG === "fr" ? "fr-FR" : "en-US";
+const EN = {
+  "Musique": "Music",
+  "Podcasts & livres": "Podcasts & books",
+  "Mes playlists": "My playlists",
+  "Mes albums": "My albums",
+  "Plus tard": "Later",
+  "Mix pour moi": "Mixes for me",
+  "Nouveautés": "New releases",
+  "Découvrir": "Discover",
+  "Nouveaux épisodes": "New episodes",
+  "Reprendre": "Resume",
+  "Mes podcasts": "My shows",
+  "Livres audio": "Audiobooks",
+  "Derniers épisodes de tes émissions": "Latest episodes from your shows",
+  "À reprendre": "Pick up where you left off",
+  "Mes livres audio": "My audiobooks",
+  "Aucun livre audio dans ta bibliothèque : en voici quelques-uns pour toi.": "No audiobooks in your library yet — here are a few for you.",
+  "Playlists des autres": "Other people's playlists",
+  "Playlists Spotify": "Spotify playlists",
+  "Aucune playlist": "No playlists",
+  "Artiste": "Artist",
+  "Livre audio": "Audiobook",
+  "Émission": "Show",
+  "Dossier": "Folder",
+  "Toi": "You",
+  "Ta playlist": "Your playlist",
+  "Épisode": "Episode",
+  "Saison en cours": "Current season",
+  "Tes titres de toujours": "Your all-time favorites",
+  "Tes épisodes": "Your episodes",
+  "Épisodes enregistrés": "Saved episodes",
+  "Titres likés": "Liked Songs",
+  "Lecture ou aléatoire": "Play or shuffle",
+  "Lecture aléatoire": "Shuffle",
+  "Lire": "Play",
+  "Lire ": "Play ",
+  "Lâcher pour ajouter": "Drop to add",
+  "Lâcher pour liker": "Drop to like",
+  "Titres likés — glisser pour réorganiser": "Liked Songs — drag to reorder",
+  "Retirer de l'accueil": "Unpin from home",
+  "Épingle une playlist": "Pin a playlist",
+  "Clic droit → Épingler sur l'accueil": "Right-click → Pin to home",
+  "Clic droit sur une playlist, un album, un artiste ou un dossier → « Épingler sur l'accueil »": "Right-click a playlist, album, artist or folder → “Pin to home”",
+  "Clic droit sur une émission ou un livre audio → « Épingler sur l'accueil » pour le retrouver ici.": "Right-click a show or audiobook → “Pin to home” to keep it here.",
+  "Tout": "All",
+  "Titres": "Tracks",
+  "Artistes": "Artists",
+  "Écouté": "Played",
+  "Retirer de « Plus tard »": "Remove from Later",
+  "Rien pour l'instant. Clic droit sur un titre, un album, une playlist ou un artiste → « Écouter plus tard ».": "Nothing yet. Right-click a track, album, playlist or artist → “Listen later”.",
+  "Plus écoutées": "Most played",
+  "Récentes": "Recent",
+  "Plus écoutés": "Most played",
+  "Récents": "Recent",
+  "Ajoutés": "Added",
+  "Sortie ↓": "Release ↓",
+  "Sortie ↑": "Release ↑",
+  "Date de sortie, les plus récents d'abord": "Release date, newest first",
+  "Date de sortie, les plus anciens d'abord": "Release date, oldest first",
+  "Anciennes": "Oldest",
+  "Ranger": "Tidy up",
+  "Playlists mal rangées, en vrac ou en sommeil": "Misfiled, loose or dormant playlists",
+  "Par écoute récente, en attendant le nombre d'écoutes": "By recent plays, until play counts build up",
+  "Discographie complète": "Full discography",
+  "Dans ta bibliothèque": "In your library",
+  "✓ dans ta bibliothèque": "✓ in your library",
+  "page de l'artiste": "artist page",
+  "← Retour": "← Back",
+  "Albums": "Albums",
+  "Singles": "Singles",
+  "Compilations": "Compilations",
+  "Compilation": "Compilation",
+  "discographie introuvable": "discography not found",
+  "Suggestions de rangement": "Tidy-up suggestions",
+  "Actualiser": "Refresh",
+  "Fermer": "Close",
+  "Mal rangées": "Misfiled",
+  "En vrac": "Loose",
+  "Pas écoutées depuis plus d'un an": "Not played in over a year",
+  "Archiver": "Archive",
+  "Ignorer": "Dismiss",
+  "Rien à ranger : ta bibliothèque est en ordre.": "Nothing to tidy: your library is in order.",
+  "Analyse impossible : ": "Analysis failed: ",
+  "Rangement impossible : ": "Couldn't move: ",
+  "Rien à afficher ici pour le moment.": "Nothing to show here yet.",
+  "Rien dans ce style ici.": "Nothing in this style here.",
+  "Mixte": "Mixed",
+  "Lecture impossible : ": "Can't play: ",
+  "Aujourd'hui": "Today",
+  "Hier": "Yesterday",
+  "Titre": "Track",
+  "Ajout impossible : ": "Couldn't add: ",
+  "Astuce : range tes playlists dans des dossiers (Électro, Rap, Jazz…) pour filtrer et lancer par style.": "Tip: sort your playlists into folders (Electronic, Rap, Jazz…) to filter and play by style.",
+  "Impossible de charger : ": "Couldn't load: ",
+  "Réessayer": "Retry",
+  "Chargement…": "Loading…",
+  "Réduire": "Show less",
+  "Il y a {n} j": "{n} d ago",
+  "{n} titres": "{n} tracks",
+  "Déjà dans {name}": "Already in {name}",
+  "{n} titre ajouté à {name}": "{n} track added to {name}",
+  "{n} titres ajoutés à {name}": "{n} tracks added to {name}",
+  "{n} titre ajouté aux titres likés": "{n} track added to Liked Songs",
+  "{n} titres ajoutés aux titres likés": "{n} tracks added to Liked Songs",
+  " · {n} écoute": " · {n} play",
+  " · {n} écoutes": " · {n} plays",
+  "Rangée dans {from}, mais {pct} de ses artistes ({known} reconnus sur {total}) relèvent de {to}": "Filed in {from}, but {pct} of its artists ({known} of {total} recognized) belong to {to}",
+  "À la racine ; {pct} de ses artistes ({known} reconnus sur {total}) relèvent de {to}": "At the root; {pct} of its artists ({known} of {total} recognized) belong to {to}",
+  "Dernière écoute : {date}": "Last played: {date}",
+  "Écoutes comptées depuis le {since}, tous appareils (une écoute = un lancement), puis par écoute récente": "Plays counted since {since}, all devices (one play = one start), then by recent plays",
+  "{n} titre": "{n} track",
+  "{name} — glisser pour réorganiser": "{name} — drag to reorder",
+  "Tout afficher ({n})": "Show all ({n})",
+  "Afficher plus ({n})": "Show more ({n})",
+  "Afficher plus ({n} restants)": "Show more ({n} left)",
+  "Analyse des styles de ta bibliothèque… {done}/{total} playlists (une seule fois)": "Analyzing your library's styles… {done}/{total} playlists (one time only)",
+  "Lancer tout {style} en aléatoire": "Shuffle all of {style}",
+  "« {name} » rangée dans {label}": "“{name}” moved to {label}",
+  "Déplacer vers {label}": "Move to {label}",
+  "Analyse de ta bibliothèque… {done}/{total} playlists": "Analyzing your library… {done}/{total} playlists",
+  "« {name} » archivée dans {folder}": "“{name}” archived in {folder}",
+  "Spotify ne garde pas de date d'écoute pour {n} playlist : celles qui dorment ne peuvent pas toutes être repérées.": "Spotify keeps no play date for {n} playlist, so dormant ones can't all be spotted.",
+  "Spotify ne garde pas de date d'écoute pour {n} playlists : celles qui dorment ne peuvent pas toutes être repérées.": "Spotify keeps no play date for {n} playlists, so dormant ones can't all be spotted.",
+  "Lecture des dates de sortie… {done}/{total} (une seule fois)": "Reading release dates… {done}/{total} (one time only)",
+  "▶ Lire les titres ({n})": "▶ Play tracks ({n})",
+  "Retirer les écoutés ({n})": "Remove played ({n})",
+  "{n} sorties · ": "{n} releases · ",
+  "Spotify a changé une partie de ses API internes.": "Spotify changed some of its internal APIs.",
+  " Certaines fonctions peuvent ne plus marcher ({list}). Mets à jour le thème depuis ": " Some features may stop working ({list}). Update the theme from ",
+  ", ou attends une mise à jour de Spicetify.": ", or wait for a Spicetify update.",
+  "Seuls les titres peuvent être likés": "Only tracks can be liked",
+  "Déjà dans les titres likés": "Already in Liked Songs",
+  "Déjà liké": "Already liked",
+  "Tous": "All"
+};
+function tr(fr, vars) {
+  let text = LANG === "en" && EN[fr] !== undefined ? EN[fr] : fr;
+  if (vars) text = text.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
+  return text;
+}
+
 const PLAYS_KEY = "accueil:plays"; // alimenté par l'extension accueil-core.js
 const CACHE_MS = 5 * 60 * 1000;
 const cache = {};
@@ -154,22 +306,22 @@ async function styleOf(card, idx) {
 // section), sauf celles de SKIP_SECTIONS : rien ne disparaît.
 const SKIP_SECTIONS = /^(Recents|Récents|Récemment|Jump back in|Reprends|Shorts)|Vid[ée]os?\b|HomeShorts/i;
 const MUSIC_TABS = [
-  { id: "playlists", label: "Mes playlists" },
-  { id: "albums", label: "Mes albums" },
-  { id: "later", label: "Plus tard" },
-  { id: "mix", label: "Mix pour moi", match: /^(Made [Ff]or|Your top mixes|Recommended [Ss]tations|Daily Mix|Conçu pour|Créé pour|Tes mix|Vos mix|Mix préférés|Radios? recommandées)/i },
-  { id: "new", label: "Nouveautés", match: /(New releases|new music|Release Radar|Nouveaut|Sorties|Radar des sorties)/i },
-  { id: "discover", label: "Découvrir", fallback: true, match: /(More like|For fans of|Based on your|Picked for you|Recommended|Playlists de|Discover|Similar|Plus du genre|Dans le style|Pour les fans|Sur la base|Choisi pour|Recommandé|Découv|Similaire)/i },
+  { id: "playlists", label: tr("Mes playlists") },
+  { id: "albums", label: tr("Mes albums") },
+  { id: "later", label: tr("Plus tard") },
+  { id: "mix", label: tr("Mix pour moi"), match: /^(Made [Ff]or|Your top mixes|Recommended [Ss]tations|Daily Mix|Conçu pour|Créé pour|Tes mix|Vos mix|Mix préférés|Radios? recommandées)/i },
+  { id: "new", label: tr("Nouveautés"), match: /(New releases|new music|Release Radar|Nouveaut|Sorties|Radar des sorties)/i },
+  { id: "discover", label: tr("Découvrir"), fallback: true, match: /(More like|For fans of|Based on your|Picked for you|Recommended|Playlists de|Discover|Similar|Plus du genre|Dans le style|Pour les fans|Sur la base|Choisi pour|Recommandé|Découv|Similaire)/i },
 ];
 const PODCAST_TABS = [
-  { id: "episodes", label: "Nouveaux épisodes", match: /^(New episode|Nouvel épisode|Nouveaux épisodes)/i, merge: "Derniers épisodes de tes émissions" },
-  { id: "resume", label: "Reprendre", match: /^(Catch up|Remettez-vous à jour|Rattrape|À rattraper|Reprendre)/i, merge: "À reprendre" },
-  { id: "shows", label: "Mes podcasts", match: /^(Your shows|Vos émissions|Tes émissions)/i },
-  { id: "books", label: "Livres audio" },
-  { id: "discover", label: "Découvrir", fallback: true, match: /(might like|Similar to|Popular with|pourriez aimer|pourraient vous plaire|pourrait te plaire|Similaire à|Populaire chez)/i },
+  { id: "episodes", label: tr("Nouveaux épisodes"), match: /^(New episode|Nouvel épisode|Nouveaux épisodes)/i, merge: tr("Derniers épisodes de tes émissions") },
+  { id: "resume", label: tr("Reprendre"), match: /^(Catch up|Remettez-vous à jour|Rattrape|À rattraper|Reprendre)/i, merge: tr("À reprendre") },
+  { id: "shows", label: tr("Mes podcasts"), match: /^(Your shows|Vos émissions|Tes émissions)/i },
+  { id: "books", label: tr("Livres audio") },
+  { id: "discover", label: tr("Découvrir"), fallback: true, match: /(might like|Similar to|Popular with|pourriez aimer|pourraient vous plaire|pourrait te plaire|Similaire à|Populaire chez)/i },
 ];
 // Sections de la facette livres audio : toutes rangées sous « Livres audio » de l'onglet Podcasts.
-const AUDIOBOOK_TABS = [{ id: "books", label: "Livres audio", fallback: true }];
+const AUDIOBOOK_TABS = [{ id: "books", label: tr("Livres audio"), fallback: true }];
 
 const TITLES = [
   [/^Made For .+/, "Conçu pour toi"],
@@ -189,9 +341,11 @@ const TITLES = [
   [/^Similar to your interests$/, "Proche de tes centres d'intérêt"],
   [/^Popular with listeners of (.+)$/, "Populaire chez les auditeurs de $1"],
 ];
-const frTitle = (t) => {
-  for (const [re, fr] of TITLES) if (re.test(t)) return t.replace(re, fr);
-  return t;
+// En anglais, les titres anglais de Spotify restent tels quels.
+const frTitle = (title) => {
+  if (LANG !== "fr") return title;
+  for (const [re, fr] of TITLES) if (re.test(title)) return title.replace(re, fr);
+  return title;
 };
 
 // ---------- données ----------
@@ -219,10 +373,10 @@ function formatDate(iso) {
   if (!iso) return "";
   const d = new Date(iso);
   const days = Math.round((Date.now() - d) / 86400000);
-  if (days <= 0) return "Aujourd'hui";
-  if (days === 1) return "Hier";
-  if (days < 7) return `Il y a ${days} j`;
-  return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+  if (days <= 0) return tr("Aujourd'hui");
+  if (days === 1) return tr("Hier");
+  if (days < 7) return tr("Il y a {n} j", { n: days });
+  return d.toLocaleDateString(LOCALE, { day: "numeric", month: "short" });
 }
 
 function toCard(data) {
@@ -235,7 +389,7 @@ function toCard(data) {
     case "Album":
       return { uri: data.uri, name: data.name, img, sub: (data.artists?.items || []).map((a) => a.profile?.name).filter(Boolean).join(", ") || "Album", artistUris: (data.artists?.items || []).map((a) => a.uri).filter(Boolean) };
     case "Artist":
-      return { uri: data.uri, name: data.profile?.name || data.name, img, sub: "Artiste", round: true };
+      return { uri: data.uri, name: data.profile?.name || data.name, img, sub: tr("Artiste"), round: true };
     case "Episode": {
       const show = data.podcastV2?.data?.name;
       const date = formatDate(data.releaseDate?.isoString);
@@ -244,7 +398,7 @@ function toCard(data) {
     case "Podcast":
       return { uri: data.uri, name: data.name, img, sub: data.publisher?.name || "Podcast" };
     case "Audiobook":
-      return { uri: data.uri, name: data.name, img, sub: (data.authorsV2 || data.authors || []).map((a) => a.name).filter(Boolean).join(", ") || "Livre audio" };
+      return { uri: data.uri, name: data.name, img, sub: (data.authorsV2 || data.authors || []).map((a) => a.name).filter(Boolean).join(", ") || tr("Livre audio") };
     default:
       return null;
   }
@@ -319,7 +473,7 @@ async function fetchPlaylists() {
       uri: i.uri,
       name: i.name,
       img: i.images?.[0]?.url || null,
-      baseSub: i.isOwnedBySelf ? "Toi" : i.owner?.name || i.madeForName || "Playlist",
+      baseSub: i.isOwnedBySelf ? tr("Toi") : i.owner?.name || i.madeForName || "Playlist",
       group: i.isOwnedBySelf ? "self" : i.owner?.uri === "spotify:user:spotify" ? "spotify" : "others",
       lastPlayedAt: i.lastPlayedAt || "",
     }));
@@ -389,7 +543,7 @@ async function play(uri, shuffle) {
     if (shuffle !== undefined) await Spicetify.Player.setShuffle(shuffle);
     await Spicetify.Player.playUri(uri);
   } catch (e) {
-    Spicetify.showNotification?.("Lecture impossible : " + (e?.message || e), true);
+    Spicetify.showNotification?.(tr("Lecture impossible : ") + (e?.message || e), true);
   }
 }
 
@@ -401,7 +555,7 @@ function openUri(uri) {
 const likedUri = () => `spotify:user:${Spicetify.Platform.username}:collection`;
 const notify = (msg, isError) => Spicetify.showNotification?.(msg, isError);
 const errMsg = (e) => e?.message || String(e);
-const titles = (n) => (n > 1 ? `${n} titres` : "Titre");
+const titles = (n) => (n > 1 ? tr("{n} titres", { n }) : tr("Titre"));
 
 // ---------- glisser-déposer ----------
 // Spotify met les URI des titres glissés dans text/x-spotify-tracks (plusieurs si sélection
@@ -439,24 +593,24 @@ async function addToPlaylist(pl, uris) {
   try {
     const have = new Set(((await P.getContents(pl.uri)).items || []).map((i) => i.uri));
     const fresh = uris.filter((u) => !have.has(u));
-    if (!fresh.length) return notify(`Déjà dans ${pl.name}`);
+    if (!fresh.length) return notify(tr("Déjà dans {name}", { name: pl.name }));
     await P.add(pl.uri, fresh, { after: "end" });
-    notify(`${titles(fresh.length)} ajouté${fresh.length > 1 ? "s" : ""} à ${pl.name}`);
+    notify(tr(fresh.length > 1 ? "{n} titres ajoutés à {name}" : "{n} titre ajouté à {name}", { n: fresh.length, name: pl.name }));
   } catch (e) {
-    notify("Ajout impossible : " + errMsg(e), true);
+    notify(tr("Ajout impossible : ") + errMsg(e), true);
   }
 }
 
 async function likeTracks(uris) {
   const L = Spicetify.Platform.LibraryAPI;
   const tracks = uris.filter((u) => u.startsWith("spotify:track:"));
-  if (!tracks.length) return notify("Seuls les titres peuvent être likés", true);
+  if (!tracks.length) return notify(tr("Seuls les titres peuvent être likés"), true);
   try {
     const liked = await L.contains(...tracks);
     const fresh = tracks.filter((u, i) => !liked[i]);
-    if (!fresh.length) return notify(tracks.length > 1 ? "Déjà dans les titres likés" : "Déjà liké");
+    if (!fresh.length) return notify(tr(tracks.length > 1 ? "Déjà dans les titres likés" : "Déjà liké"));
     await L.add({ uris: fresh });
-    notify(`${titles(fresh.length)} ajouté${fresh.length > 1 ? "s" : ""} aux titres likés`);
+    notify(tr(fresh.length > 1 ? "{n} titres ajoutés aux titres likés" : "{n} titre ajouté aux titres likés", { n: fresh.length }));
   } catch (e) {
     notify("Like impossible : " + errMsg(e), true);
   }
@@ -474,10 +628,10 @@ function HealthBanner() {
   }, []);
   if (!missing.length) return null;
   return h("div", { className: "acc-alert" },
-    h("strong", null, "Spotify a changé une partie de ses API internes."),
-    ` Certaines fonctions peuvent ne plus marcher (${missing.join(", ")}). Mets à jour le thème depuis `,
+    h("strong", null, tr("Spotify a changé une partie de ses API internes.")),
+    tr(" Certaines fonctions peuvent ne plus marcher ({list}). Mets à jour le thème depuis ", { list: missing.join(", ") }),
     h("a", { href: "https://github.com/Simon-Gaspar/spicetify-compact" }, "github.com/Simon-Gaspar/spicetify-compact"),
-    ", ou attends une mise à jour de Spicetify.");
+    tr(", ou attends une mise à jour de Spicetify."));
 }
 
 // ---------- composants ----------
@@ -506,7 +660,7 @@ function Card({ card }) {
   return withMenu(card.uri, h("div", { className: "acc-card", onClick: () => openUri(card.uri), title: card.name },
     h("div", { className: "acc-cover" + (card.round ? " is-round" : "") },
       card.img ? h("img", { src: card.img, loading: "lazy", alt: "", draggable: false }) : h("div", { className: "acc-ph" }),
-      h("button", { className: "acc-play", "aria-label": "Lire " + card.name, onClick: (e) => { e.stopPropagation(); play(card.uri); } }, h(PlayIcon))),
+      h("button", { className: "acc-play", "aria-label": tr("Lire ") + card.name, onClick: (e) => { e.stopPropagation(); play(card.uri); } }, h(PlayIcon))),
     h("div", { className: "acc-name" }, card.name),
     card.sub && h("div", { className: "acc-sub" }, card.sub)));
 }
@@ -521,7 +675,7 @@ function Section({ title, items, limit }) {
   return h("section", { className: "acc-section" },
     h("div", { className: "acc-section-head" },
       h("h2", null, title),
-      limit && items.length > limit && h("button", { className: "acc-link", onClick: () => setOpen(!open) }, open ? "Réduire" : `Tout afficher (${items.length})`)),
+      limit && items.length > limit && h("button", { className: "acc-link", onClick: () => setOpen(!open) }, open ? tr("Réduire") : tr("Tout afficher ({n})", { n: items.length }))),
     h(Grid, { items: shown }));
 }
 
@@ -538,8 +692,8 @@ function useAsync(fn, deps) {
 }
 
 function Status({ state, children }) {
-  if (state.error) return h("div", { className: "acc-empty" }, "Impossible de charger : " + (state.error.message || state.error), " ", h("button", { className: "acc-link", onClick: state.retry }, "Réessayer"));
-  if (state.loading && !state.data) return h("div", { className: "acc-empty" }, "Chargement…");
+  if (state.error) return h("div", { className: "acc-empty" }, tr("Impossible de charger : ") + (state.error.message || state.error), " ", h("button", { className: "acc-link", onClick: state.retry }, tr("Réessayer")));
+  if (state.loading && !state.data) return h("div", { className: "acc-empty" }, tr("Chargement…"));
   return children();
 }
 
@@ -553,7 +707,7 @@ function usePlays() {
   return plays;
 }
 
-const playsLabel = (n) => (n ? ` · ${n} écoute${n > 1 ? "s" : ""}` : "");
+const playsLabel = (n) => (n ? tr(n > 1 ? " · {n} écoutes" : " · {n} écoute", { n }) : "");
 const withPlays = (items, plays) => items.map((c) => ({ ...c, n: plays[c.uri]?.n || 0, sub: c.baseSub + playsLabel(plays[c.uri]?.n) }));
 
 function useStyles(items) {
@@ -593,7 +747,7 @@ function StyleBar({ items, styles, names, progress, value, onChange }) {
   const [folders, setFolders] = useState({});
   const [busy, setBusy] = useState(null);
   useEffect(() => { getStyleFolders().then(setFolders, (e) => warn("dossiers de style", e)); }, []);
-  if (progress) return h("div", { className: "acc-hint" }, `Analyse des styles de ta bibliothèque… ${progress.done}/${progress.total} playlists (une seule fois)`);
+  if (progress) return h("div", { className: "acc-hint" }, tr("Analyse des styles de ta bibliothèque… {done}/{total} playlists (une seule fois)", progress));
   const counts = {};
   for (const c of items) {
     const st = styles[c.uri];
@@ -601,18 +755,18 @@ function StyleBar({ items, styles, names, progress, value, onChange }) {
   }
   const options = [...names, MIXED].filter((st) => counts[st]);
   // Aucun dossier de style dans la bibliothèque : on explique comment en avoir.
-  if (!names.length) return h("div", { className: "acc-hint" }, "Astuce : range tes playlists dans des dossiers (Électro, Rap, Jazz…) pour filtrer et lancer par style.");
+  if (!names.length) return h("div", { className: "acc-hint" }, tr("Astuce : range tes playlists dans des dossiers (Électro, Rap, Jazz…) pour filtrer et lancer par style."));
   if (!options.length) return null;
   const launch = async (st) => {
     setBusy(st);
-    try { await playFolder(folders[st]); } catch (e) { Spicetify.showNotification?.("Lecture impossible : " + (e?.message || e), true); }
+    try { await playFolder(folders[st]); } catch (e) { Spicetify.showNotification?.(tr("Lecture impossible : ") + (e?.message || e), true); }
     setBusy(null);
   };
   return h("div", { className: "acc-styles" },
-    h("button", { className: "acc-schip" + (value === "all" ? " is-on" : ""), onClick: () => onChange("all") }, "Tous", h("span", { className: "acc-chip-n" }, items.length)),
+    h("button", { className: "acc-schip" + (value === "all" ? " is-on" : ""), onClick: () => onChange("all") }, tr("Tous"), h("span", { className: "acc-chip-n" }, items.length)),
     options.map((st) => h("span", { key: st, className: "acc-schip" + (value === st ? " is-on" : "") },
-      folders[st] && h("button", { className: "acc-schip-play", title: `Lancer tout ${st} en aléatoire`, disabled: !!busy, onClick: () => launch(st) }, busy === st ? "…" : h(PlayIcon)),
-      h("button", { className: "acc-schip-label", onClick: () => onChange(st) }, st, h("span", { className: "acc-chip-n" }, counts[st])))));
+      folders[st] && h("button", { className: "acc-schip-play", title: tr("Lancer tout {style} en aléatoire", { style: tr(st) }), disabled: !!busy, onClick: () => launch(st) }, busy === st ? "…" : h(PlayIcon)),
+      h("button", { className: "acc-schip-label", onClick: () => onChange(st) }, tr(st), h("span", { className: "acc-chip-n" }, counts[st])))));
 }
 
 function Toolbar({ children }) {
@@ -630,26 +784,26 @@ function Sorts({ options, value, onChange }) {
 }
 
 const PLAYLIST_SORTS = [
-  { id: "top", label: "Plus écoutées" },
-  { id: "recent", label: "Récentes" },
+  { id: "top", label: tr("Plus écoutées") },
+  { id: "recent", label: tr("Récentes") },
   { id: "az", label: "A → Z" },
 ];
 const COLUMNS = [
-  { id: "self", label: "Mes playlists" },
-  { id: "others", label: "Playlists des autres" },
-  { id: "spotify", label: "Playlists Spotify" },
+  { id: "self", label: tr("Mes playlists") },
+  { id: "others", label: tr("Playlists des autres") },
+  { id: "spotify", label: tr("Playlists Spotify") },
 ];
 
 // Vignette compacte pour les colonnes de playlists : grille dense, nom sous la pochette.
 // Les playlists à soi acceptent qu'on y dépose des titres.
 function Tile({ card, showOwner }) {
-  const tip = card.name + (showOwner && card.baseSub ? ` — ${card.baseSub}` : "") + (card.n ? ` · ${card.n} écoute${card.n > 1 ? "s" : ""}` : "");
+  const tip = card.name + (showOwner && card.baseSub ? ` — ${card.baseSub}` : "") + playsLabel(card.n);
   const [over, drop] = useDrop((uris) => addToPlaylist(card, uris));
   return withMenu(card.uri, h("div", { className: "acc-tile" + (over ? " is-drop" : ""), onClick: () => openUri(card.uri), title: tip, ...(card.group === "self" ? drop : {}) },
     h("div", { className: "acc-tile-img" },
       card.img ? h("img", { src: card.img, loading: "lazy", alt: "", draggable: false }) : null,
       card.n > 0 && h("span", { className: "acc-tile-n" }, card.n),
-      h("button", { className: "acc-tile-play", "aria-label": "Lire " + card.name, onClick: (e) => { e.stopPropagation(); play(card.uri); } }, h(PlayIcon))),
+      h("button", { className: "acc-tile-play", "aria-label": tr("Lire ") + card.name, onClick: (e) => { e.stopPropagation(); play(card.uri); } }, h(PlayIcon))),
     h("div", { className: "acc-tile-name" }, card.name)));
 }
 
@@ -659,8 +813,8 @@ function Column({ id, label, items }) {
     h("div", { className: "acc-col-head" }, h("h2", null, label), h("span", { className: "acc-count" }, items.length)),
     items.length
       ? h("div", { className: "acc-tiles" }, items.slice(0, n).map((c) => h(Tile, { key: c.uri, card: c, showOwner: id === "others" })))
-      : h("div", { className: "acc-sub" }, "Aucune playlist"),
-    items.length > n && h("button", { className: "acc-link acc-col-more", onClick: () => setN(n + 120) }, `Afficher plus (${items.length - n})`));
+      : h("div", { className: "acc-sub" }, tr("Aucune playlist")),
+    items.length > n && h("button", { className: "acc-link acc-col-more", onClick: () => setN(n + 120) }, tr("Afficher plus ({n})", { n: items.length - n })));
 }
 
 // ---------- suggestions de rangement ----------
@@ -793,7 +947,7 @@ function TidyPanel({ onClose }) {
   useEffect(() => { if (!data) run(); }, []);
   const ignore = (uri) => { const next = new Set(ignored).add(uri); setIgnored(next); lsSet(TIDY_IGNORED, [...next]); };
   const act = async (item, fn, msg) => {
-    try { await fn(); setDone(new Set(done).add(item.uri)); notify(msg); } catch (e) { notify("Rangement impossible : " + errMsg(e), true); }
+    try { await fn(); setDone(new Set(done).add(item.uri)); notify(msg); } catch (e) { notify(tr("Rangement impossible : ") + errMsg(e), true); }
   };
   const visible = (list) => (list || []).filter((x) => !ignored.has(x.uri) && !done.has(x.uri));
   const pct = (x) => `${Math.round(x.share * 100)} %`;
@@ -804,30 +958,30 @@ function TidyPanel({ onClose }) {
       h("a", { className: "acc-tidy-name", onClick: () => openUri(x.uri) }, x.name),
       h("div", { className: "acc-sub" }, reason)),
     action,
-    h("button", { className: "acc-sort", onClick: () => ignore(x.uri) }, "Ignorer"));
-  const move = (x, label) => x.toFolder && h("button", { className: "acc-chip is-small", onClick: () => act(x, async () => { await moveToFolder(x.uri, x.toFolder); restyle(x.uri, x.to); }, `« ${x.name} » rangée dans ${label}`) }, `Déplacer vers ${label}`);
+    h("button", { className: "acc-sort", onClick: () => ignore(x.uri) }, tr("Ignorer")));
+  const move = (x, label) => x.toFolder && h("button", { className: "acc-chip is-small", onClick: () => act(x, async () => { await moveToFolder(x.uri, x.toFolder); restyle(x.uri, x.to); }, tr("« {name} » rangée dans {label}", { name: x.name, label })) }, tr("Déplacer vers {label}", { label }));
   const group = (title, items, render) => items.length > 0 && h("div", { className: "acc-tidy-group" }, h("h3", null, `${title} · ${items.length}`), items.map(render));
 
   let body;
-  if (error) body = h("div", { className: "acc-sub" }, "Analyse impossible : " + error);
-  else if (progress) body = h("div", { className: "acc-hint" }, `Analyse de ta bibliothèque… ${progress.done}/${progress.total || "…"} playlists`);
+  if (error) body = h("div", { className: "acc-sub" }, tr("Analyse impossible : ") + error);
+  else if (progress) body = h("div", { className: "acc-hint" }, tr("Analyse de ta bibliothèque… {done}/{total} playlists", { done: progress.done, total: progress.total || "…" }));
   else if (data) {
     const misplaced = visible(data.misplaced), toFile = visible(data.toFile), dormant = visible(data.dormant);
     body = h(React.Fragment, null,
-      !misplaced.length && !toFile.length && !dormant.length && h("div", { className: "acc-sub" }, "Rien à ranger : ta bibliothèque est en ordre."),
-      group("Mal rangées", misplaced, (x) => row(x, `Rangée dans ${x.from}, mais ${pct(x)} de ses artistes (${x.known} reconnus sur ${x.total}) relèvent de ${x.to}`, move(x, x.to))),
-      group("En vrac", toFile, (x) => row(x, `À la racine ; ${pct(x)} de ses artistes (${x.known} reconnus sur ${x.total}) relèvent de ${x.to}`, move(x, x.to))),
-      group("Pas écoutées depuis plus d'un an", dormant, (x) => row(x, `Dernière écoute : ${new Date(x.last).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}`,
-        h("button", { className: "acc-chip is-small", onClick: () => act(x, async () => { await moveToFolder(x.uri, await archiveFolderUri()); restyle(x.uri, null); }, `« ${x.name} » archivée dans ${ARCHIVE_FOLDER}`) }, "Archiver"))),
-      data.undated > 0 && h("div", { className: "acc-hint acc-tidy-note" }, `Spotify ne garde pas de date d'écoute pour ${data.undated} playlist${data.undated > 1 ? "s" : ""} : celles qui dorment ne peuvent pas toutes être repérées.`));
+      !misplaced.length && !toFile.length && !dormant.length && h("div", { className: "acc-sub" }, tr("Rien à ranger : ta bibliothèque est en ordre.")),
+      group(tr("Mal rangées"), misplaced, (x) => row(x, tr("Rangée dans {from}, mais {pct} de ses artistes ({known} reconnus sur {total}) relèvent de {to}", { from: x.from, pct: pct(x), known: x.known, total: x.total, to: x.to }), move(x, x.to))),
+      group(tr("En vrac"), toFile, (x) => row(x, tr("À la racine ; {pct} de ses artistes ({known} reconnus sur {total}) relèvent de {to}", { pct: pct(x), known: x.known, total: x.total, to: x.to }), move(x, x.to))),
+      group(tr("Pas écoutées depuis plus d'un an"), dormant, (x) => row(x, tr("Dernière écoute : {date}", { date: new Date(x.last).toLocaleDateString(LOCALE, { month: "long", year: "numeric" }) }),
+        h("button", { className: "acc-chip is-small", onClick: () => act(x, async () => { await moveToFolder(x.uri, await archiveFolderUri()); restyle(x.uri, null); }, tr("« {name} » archivée dans {folder}", { name: x.name, folder: ARCHIVE_FOLDER })) }, tr("Archiver")))),
+      data.undated > 0 && h("div", { className: "acc-hint acc-tidy-note" }, tr(data.undated > 1 ? "Spotify ne garde pas de date d'écoute pour {n} playlists : celles qui dorment ne peuvent pas toutes être repérées." : "Spotify ne garde pas de date d'écoute pour {n} playlist : celles qui dorment ne peuvent pas toutes être repérées.", { n: data.undated })));
   }
 
   return h("div", { className: "acc-tidy" },
     h("div", { className: "acc-tidy-head" },
-      h("h2", null, "Suggestions de rangement"),
+      h("h2", null, tr("Suggestions de rangement")),
       h("div", { className: "acc-sorts" },
-        !progress && h("button", { className: "acc-sort", onClick: run }, "Actualiser"),
-        h("button", { className: "acc-sort", onClick: onClose }, "Fermer"))),
+        !progress && h("button", { className: "acc-sort", onClick: run }, tr("Actualiser")),
+        h("button", { className: "acc-sort", onClick: onClose }, tr("Fermer")))),
     body);
 }
 
@@ -845,8 +999,8 @@ function MyPlaylists() {
     return list.sort((a, b) => b.n - a.n || byRecent(a, b));
   }, [state.data, sort, plays]);
   const shown = sorted.filter(byStyle(style, styles));
-  const since = plays._since ? new Date(plays._since).toLocaleDateString("fr-FR") : null;
-  const sorts = PLAYLIST_SORTS.map((o) => (o.id === "top" ? { ...o, title: since ? `Écoutes comptées depuis le ${since}, tous appareils (une écoute = un lancement), puis par écoute récente` : "Par écoute récente, en attendant le nombre d'écoutes" } : o));
+  const since = plays._since ? new Date(plays._since).toLocaleDateString(LOCALE) : null;
+  const sorts = PLAYLIST_SORTS.map((o) => (o.id === "top" ? { ...o, title: since ? tr("Écoutes comptées depuis le {since}, tous appareils (une écoute = un lancement), puis par écoute récente", { since }) : tr("Par écoute récente, en attendant le nombre d'écoutes") } : o));
 
   return h(Status, { state }, () =>
     h("section", { className: "acc-section" },
@@ -854,20 +1008,20 @@ function MyPlaylists() {
         h(StyleBar, { items: sorted, styles, names, progress, value: style, onChange: setStyle }),
         h("div", { className: "acc-sorts" },
           h(Sorts, { options: sorts, value: sort, onChange: setSort }),
-          h("button", { className: "acc-sort" + (tidy ? " is-on" : ""), title: "Playlists mal rangées, en vrac ou en sommeil", onClick: () => setTidy(!tidy) }, "Ranger"))),
+          h("button", { className: "acc-sort" + (tidy ? " is-on" : ""), title: tr("Playlists mal rangées, en vrac ou en sommeil"), onClick: () => setTidy(!tidy) }, tr("Ranger")))),
       tidy && h(TidyPanel, { onClose: () => setTidy(false) }),
       h("div", { className: "acc-cols" },
         COLUMNS.map((c) => h(Column, { key: c.id + sort + style, id: c.id, label: c.label, items: shown.filter((p) => p.group === c.id) })))));
 }
 
 const ALBUM_SORTS = [
-  { id: "top", label: "Plus écoutés" },
-  { id: "recent", label: "Récents" },
-  { id: "added", label: "Ajoutés" },
+  { id: "top", label: tr("Plus écoutés") },
+  { id: "recent", label: tr("Récents") },
+  { id: "added", label: tr("Ajoutés") },
   { id: "az", label: "A → Z" },
-  { id: "artist", label: "Artiste" },
-  { id: "release", label: "Sortie ↓", title: "Date de sortie, les plus récents d'abord" },
-  { id: "release-asc", label: "Sortie ↑", title: "Date de sortie, les plus anciens d'abord" },
+  { id: "artist", label: tr("Artiste") },
+  { id: "release", label: tr("Sortie ↓"), title: tr("Date de sortie, les plus récents d'abord") },
+  { id: "release-asc", label: tr("Sortie ↑"), title: tr("Date de sortie, les plus anciens d'abord") },
 ];
 
 function MyAlbums() {
@@ -897,7 +1051,7 @@ function MyAlbums() {
       h(Toolbar, null,
         h(StyleBar, { items: sorted, styles, names, progress, value: style, onChange: setStyle }),
         h(Sorts, { options: ALBUM_SORTS, value: sort, onChange: setSort })),
-      datesProgress && h("div", { className: "acc-hint acc-note" }, `Lecture des dates de sortie… ${datesProgress.done}/${datesProgress.total} (une seule fois)`),
+      datesProgress && h("div", { className: "acc-hint acc-note" }, tr("Lecture des dates de sortie… {done}/{total} (une seule fois)", datesProgress)),
       h(SectionlessGrid, { key: sort + style, items: shown })));
 }
 
@@ -905,7 +1059,7 @@ function SectionlessGrid({ items }) {
   const [n, setN] = useState(48);
   return h(React.Fragment, null,
     h(Grid, { items: items.slice(0, n) }),
-    items.length > n && h("div", { className: "acc-more" }, h("button", { className: "acc-chip", onClick: () => setN(n + 96) }, `Afficher plus (${items.length - n} restants)`)));
+    items.length > n && h("div", { className: "acc-more" }, h("button", { className: "acc-chip", onClick: () => setN(n + 96) }, tr("Afficher plus ({n} restants)", { n: items.length - n }))));
 }
 
 function HomeSections({ facet, tab, tabs }) {
@@ -913,7 +1067,7 @@ function HomeSections({ facet, tab, tabs }) {
   const sections = useMemo(() => (state.data ? sectionsFor(tab, tabs, state.data) : []), [state.data]);
   return h(Status, { state }, () =>
     !sections.length
-      ? h("div", { className: "acc-empty" }, "Rien à afficher ici pour le moment.")
+      ? h("div", { className: "acc-empty" }, tr("Rien à afficher ici pour le moment."))
       : facet === "music-chip"
         ? h(StyledSections, { sections, limit: tab.merge ? 24 : 12 })
         : h(React.Fragment, null, sections.map((s) => h(Section, { key: s.title, title: s.title, items: s.items, limit: tab.merge ? 24 : 12 }))));
@@ -927,19 +1081,19 @@ function StyledSections({ sections, limit }) {
   const filtered = sections.map((s) => ({ ...s, items: s.items.filter(keep) })).filter((s) => s.items.length);
   return h(React.Fragment, null,
     h(Toolbar, null, h(StyleBar, { items: all, styles, names, progress, value: style, onChange: setStyle })),
-    filtered.length ? filtered.map((s) => h(Section, { key: s.title + style, title: s.title, items: s.items, limit })) : h("div", { className: "acc-empty" }, "Rien dans ce style ici."));
+    filtered.length ? filtered.map((s) => h(Section, { key: s.title + style, title: s.title, items: s.items, limit })) : h("div", { className: "acc-empty" }, tr("Rien dans ce style ici.")));
 }
 
 function LikedHero({ reorder, drag }) {
   const [over, drop] = useDrop(likeTracks);
   const { handlers, cls } = pinDrag(LIKED_PIN, reorder, drag, drop);
-  return h("div", { className: "acc-liked" + (over ? " is-drop" : "") + cls, onClick: () => Spicetify.Platform.History.push("/collection/tracks"), title: "Titres likés — glisser pour réorganiser", ...handlers },
+  return h("div", { className: "acc-liked" + (over ? " is-drop" : "") + cls, onClick: () => Spicetify.Platform.History.push("/collection/tracks"), title: tr("Titres likés — glisser pour réorganiser"), ...handlers },
     h("div", { className: "acc-liked-art" }, h("svg", { viewBox: "0 0 24 24", width: 28, height: 28, fill: "#fff" }, h("path", { d: "M12 21s-7.5-4.6-9.6-9.2C.8 8.3 3 4.5 6.6 4.5c2.1 0 3.6 1.2 4.4 2.5.8-1.3 2.3-2.5 4.4-2.5 3.6 0 5.8 3.8 4.2 7.3C19.5 16.4 12 21 12 21z" }))),
     h("div", { className: "acc-liked-text" },
-      h("div", { className: "acc-liked-title" }, "Titres likés"),
-      h("div", { className: "acc-sub" }, over ? "Lâcher pour liker" : "Lecture ou aléatoire")),
-    h("button", { className: "acc-round is-ghost", title: "Lecture aléatoire", onClick: (e) => { e.stopPropagation(); play(likedUri(), true); } }, h(ShuffleIcon)),
-    h("button", { className: "acc-round", title: "Lire", onClick: (e) => { e.stopPropagation(); play(likedUri(), false); } }, h(PlayIcon)));
+      h("div", { className: "acc-liked-title" }, tr("Titres likés")),
+      h("div", { className: "acc-sub" }, over ? tr("Lâcher pour liker") : tr("Lecture ou aléatoire"))),
+    h("button", { className: "acc-round is-ghost", title: tr("Lecture aléatoire"), onClick: (e) => { e.stopPropagation(); play(likedUri(), true); } }, h(ShuffleIcon)),
+    h("button", { className: "acc-round", title: tr("Lire"), onClick: (e) => { e.stopPropagation(); play(likedUri(), false); } }, h(PlayIcon)));
 }
 
 // Lance tout un dossier de style en aléatoire. Le lecteur ne sait pas lire un dossier par son
@@ -971,11 +1125,11 @@ async function playFolder(folder) {
 // ---------- plus tard ----------
 // Liste tenue par l'extension accueil-core.js (menu clic droit « Écouter plus tard »).
 const LATER_KINDS = [
-  { id: "all", label: "Tout" },
-  { id: "track", label: "Titres" },
-  { id: "album", label: "Albums" },
+  { id: "all", label: tr("Tout") },
+  { id: "track", label: tr("Titres") },
+  { id: "album", label: tr("Albums") },
   { id: "playlist", label: "Playlists" },
-  { id: "artist", label: "Artistes" },
+  { id: "artist", label: tr("Artistes") },
 ];
 
 function useLater() {
@@ -994,7 +1148,7 @@ async function playTracks(uris) {
   try {
     await Spicetify.Player.playUri(uris[0]);
     if (uris.length > 1) await Spicetify.Platform.PlayerAPI.addToQueue(uris.slice(1).map((uri) => ({ uri })));
-  } catch (e) { notify("Lecture impossible : " + errMsg(e), true); }
+  } catch (e) { notify(tr("Lecture impossible : ") + errMsg(e), true); }
 }
 
 function LaterCard({ item }) {
@@ -1002,9 +1156,9 @@ function LaterCard({ item }) {
   return withMenu(item.uri, h("div", { className: "acc-card" + (item.played ? " is-played" : ""), onClick: () => openUri(item.uri), title: item.name },
     h("div", { className: "acc-cover" + (item.round ? " is-round" : "") },
       item.img ? h("img", { src: item.img, loading: "lazy", alt: "", draggable: false }) : h("div", { className: "acc-ph" }),
-      item.played && h("span", { className: "acc-badge" }, "Écouté"),
-      h("button", { className: "acc-remove", title: "Retirer de « Plus tard »", onClick: remove }, "×"),
-      h("button", { className: "acc-play", "aria-label": "Lire " + item.name, onClick: (e) => { e.stopPropagation(); play(item.uri); } }, h(PlayIcon))),
+      item.played && h("span", { className: "acc-badge" }, tr("Écouté")),
+      h("button", { className: "acc-remove", title: tr("Retirer de « Plus tard »"), onClick: remove }, "×"),
+      h("button", { className: "acc-play", "aria-label": tr("Lire ") + item.name, onClick: (e) => { e.stopPropagation(); play(item.uri); } }, h(PlayIcon))),
     h("div", { className: "acc-name" }, item.name),
     h("div", { className: "acc-sub" }, [LATER_KINDS.find((k) => k.id === item.kind)?.label.replace(/s$/, ""), item.sub].filter(Boolean).join(" · "))));
 }
@@ -1015,7 +1169,7 @@ function Later() {
   const shown = list.filter((i) => kind === "all" || i.kind === kind);
   const tracks = shown.filter((i) => i.kind === "track" && !i.played).map((i) => i.uri);
   const played = list.filter((i) => i.played).map((i) => i.uri);
-  if (!list.length) return h("div", { className: "acc-empty" }, "Rien pour l'instant. Clic droit sur un titre, un album, une playlist ou un artiste → « Écouter plus tard ».");
+  if (!list.length) return h("div", { className: "acc-empty" }, tr("Rien pour l'instant. Clic droit sur un titre, un album, une playlist ou un artiste → « Écouter plus tard »."));
   return h("section", { className: "acc-section" },
     h(Toolbar, null,
       h("div", { className: "acc-styles" },
@@ -1024,15 +1178,15 @@ function Later() {
           return n > 0 && h("button", { key: k.id, className: "acc-schip" + (kind === k.id ? " is-on" : ""), onClick: () => setKind(k.id) }, k.label, h("span", { className: "acc-chip-n" }, n));
         })),
       h("div", { className: "acc-sorts" },
-        tracks.length > 0 && h("button", { className: "acc-sort", onClick: () => playTracks(tracks) }, `▶ Lire les titres (${tracks.length})`),
-        played.length > 0 && h("button", { className: "acc-sort", onClick: () => window.AccueilCore?.removeLater?.(played) }, `Retirer les écoutés (${played.length})`))),
+        tracks.length > 0 && h("button", { className: "acc-sort", onClick: () => playTracks(tracks) }, tr("▶ Lire les titres ({n})", { n: tracks.length })),
+        played.length > 0 && h("button", { className: "acc-sort", onClick: () => window.AccueilCore?.removeLater?.(played) }, tr("Retirer les écoutés ({n})", { n: played.length })))),
     h("div", { className: "acc-grid" }, shown.map((i) => h(LaterCard, { key: i.uri, item: i }))));
 }
 
 // ---------- discographie ----------
 // Page /accueil/discographie/<id>, ouverte depuis le menu clic droit « Discographie complète ».
-const RELEASE_TYPES = { ALBUM: "Albums", EP: "EP", SINGLE: "Singles", COMPILATION: "Compilations" };
-const RELEASE_ONE = { ALBUM: "Album", EP: "EP", SINGLE: "Single", COMPILATION: "Compilation" };
+const RELEASE_TYPES = { ALBUM: tr("Albums"), EP: "EP", SINGLE: tr("Singles"), COMPILATION: tr("Compilations") };
+const RELEASE_ONE = { ALBUM: "Album", EP: "EP", SINGLE: "Single", COMPILATION: tr("Compilation") };
 
 async function fetchDiscography(id) {
   const G = Spicetify.GraphQL;
@@ -1041,7 +1195,7 @@ async function fetchDiscography(id) {
   for (let offset = 0; ; offset += 50) {
     const r = await G.Request(G.Definitions.queryArtistDiscographyAll, { uri, offset, limit: 50, order: "DATE_DESC" });
     const all = r?.data?.artistUnion?.discography?.all;
-    if (!all) throw new Error("discographie introuvable");
+    if (!all) throw new Error(tr("discographie introuvable"));
     for (const it of all.items || []) {
       const rel = it.releases?.items?.[0];
       if (!rel) continue;
@@ -1069,8 +1223,8 @@ async function fetchDiscography(id) {
 }
 
 const DISCO_SORTS = [
-  { id: "new", label: "Récentes" },
-  { id: "old", label: "Anciennes" },
+  { id: "new", label: tr("Récentes") },
+  { id: "old", label: tr("Anciennes") },
   { id: "az", label: "A → Z" },
 ];
 
@@ -1084,20 +1238,20 @@ function Discography({ id }) {
     const keep = (r) => type === "all" || (type === "saved" ? r.saved : r.type === type);
     const list = d.releases.filter(keep).sort((a, b) =>
       sort === "az" ? byName(a, b) : (sort === "old" ? 1 : -1) * a.date.localeCompare(b.date));
-    const cards = list.map((r) => ({ ...r, sub: [r.date.slice(0, 4), RELEASE_ONE[r.type] || "", r.tracks ? `${r.tracks} titre${r.tracks > 1 ? "s" : ""}` : "", r.saved ? "✓ dans ta bibliothèque" : ""].filter(Boolean).join(" · ") }));
+    const cards = list.map((r) => ({ ...r, sub: [r.date.slice(0, 4), RELEASE_ONE[r.type] || "", r.tracks ? tr(r.tracks > 1 ? "{n} titres" : "{n} titre", { n: r.tracks }) : "", r.saved ? tr("✓ dans ta bibliothèque") : ""].filter(Boolean).join(" · ") }));
     const chip = (t, label, n) => n > 0 && h("button", { key: t, className: "acc-schip" + (type === t ? " is-on" : ""), onClick: () => setType(t) }, label, h("span", { className: "acc-chip-n" }, n));
     return h("section", { className: "acc-section" },
       h("div", { className: "acc-disco-head" },
         d.avatar && h("img", { className: "acc-disco-avatar", src: d.avatar, alt: "" }),
         h("div", null,
-          h("div", { className: "acc-disco-kicker" }, "Discographie complète"),
-          h("h1", { className: "acc-disco-name" }, d.name || "Artiste"),
-          h("div", { className: "acc-sub" }, `${d.releases.length} sorties · `, h("a", { className: "acc-link", onClick: () => openUri(d.uri) }, "page de l'artiste")))),
+          h("div", { className: "acc-disco-kicker" }, tr("Discographie complète")),
+          h("h1", { className: "acc-disco-name" }, d.name || tr("Artiste")),
+          h("div", { className: "acc-sub" }, tr("{n} sorties · ", { n: d.releases.length }), h("a", { className: "acc-link", onClick: () => openUri(d.uri) }, tr("page de l'artiste"))))),
       h(Toolbar, null,
         h("div", { className: "acc-styles" },
-          chip("all", "Tout", d.releases.length),
+          chip("all", tr("Tout"), d.releases.length),
           Object.entries(RELEASE_TYPES).map(([t, label]) => chip(t, label, count(t))),
-          chip("saved", "Dans ta bibliothèque", count("saved"))),
+          chip("saved", tr("Dans ta bibliothèque"), count("saved"))),
         h(Sorts, { options: DISCO_SORTS, value: sort, onChange: setSort })),
       h(Grid, { items: cards }));
   });
@@ -1157,15 +1311,15 @@ function usePins() {
 
 function pinLabel(item) {
   const core = window.AccueilCore;
-  if (TOP_RE.test(item.name || "")) return ["All-Time Top", "Tes titres de toujours"];
-  if (core && core.normName(item.name || "") === core.normName(core.currentSeason())) return [item.name, "Saison en cours"];
+  if (TOP_RE.test(item.name || "")) return ["All-Time Top", tr("Tes titres de toujours")];
+  if (core && core.normName(item.name || "") === core.normName(core.currentSeason())) return [item.name, tr("Saison en cours")];
   switch (item.type) {
-    case "your-episodes": return ["Tes épisodes", "Épisodes enregistrés"];
-    case "folder": return [item.name, "Dossier"];
+    case "your-episodes": return [tr("Tes épisodes"), tr("Épisodes enregistrés")];
+    case "folder": return [item.name, tr("Dossier")];
     case "album": return [item.name, (item.artists || []).map((a) => a.name).join(", ") || "Album"];
-    case "artist": return [item.name, "Artiste"];
-    case "show": return [item.name, "Émission"];
-    default: return [item.name, item.isOwnedBySelf ? "Ta playlist" : item.owner?.name || "Playlist"];
+    case "artist": return [item.name, tr("Artiste")];
+    case "show": return [item.name, tr("Émission")];
+    default: return [item.name, item.isOwnedBySelf ? tr("Ta playlist") : item.owner?.name || "Playlist"];
   }
 }
 
@@ -1175,7 +1329,7 @@ async function playPinned(item) {
     const find = (items) => { for (const i of items) { if (i.uri === item.uri) return i; const f = i.items && find(i.items); if (f) return f; } return null; };
     const folder = find((await Spicetify.Platform.RootlistAPI.getContents({})).items);
     if (folder) await playFolder(folder);
-  } catch (e) { notify("Lecture impossible : " + errMsg(e), true); }
+  } catch (e) { notify(tr("Lecture impossible : ") + errMsg(e), true); }
 }
 
 // Réorganisation des épingles par glisser-déposer, avec un type de glisser propre (distinct des
@@ -1212,33 +1366,35 @@ function PinHero({ item, reorder, drag }) {
   const droppable = item.type === "playlist" && item.isOwnedBySelf;
   const [over, drop] = useDrop((uris) => addToPlaylist({ uri: item.uri, name: item.name }, uris));
   const img = item.images?.[0]?.url;
-  const isSeason = sub === "Saison en cours";
+  const isSeason = sub === tr("Saison en cours");
   const open = () => (item.type === "your-episodes" ? Spicetify.Platform.History.push("/collection/your-episodes") : openUri(item.uri));
   const { handlers, cls: dragCls } = pinDrag(item.uri, reorder, drag, droppable ? drop : null);
   const cls = "acc-liked" + (over ? " is-drop" : "") + dragCls;
-  return withMenu(item.uri, h("div", { className: cls, onClick: open, title: `${item.name} — glisser pour réorganiser`, ...handlers },
+  return withMenu(item.uri, h("div", { className: cls, onClick: open, title: tr("{name} — glisser pour réorganiser", { name: item.name }), ...handlers },
     h("div", { className: "acc-liked-art" + (isSeason ? " is-season" : "") }, img ? h("img", { src: img, alt: "" }) : null),
     h("div", { className: "acc-liked-text" },
       h("div", { className: "acc-liked-title" }, title),
-      h("div", { className: "acc-sub" }, over ? "Lâcher pour ajouter" : sub)),
-    h("button", { className: "acc-pin-x", title: "Retirer de l'accueil", onClick: (e) => { e.stopPropagation(); window.AccueilCore?.unpinUri?.(item.uri); } }, "×"),
-    h("button", { className: "acc-round", title: "Lire", onClick: (e) => { e.stopPropagation(); playPinned(item); } }, h(PlayIcon))));
+      h("div", { className: "acc-sub" }, over ? tr("Lâcher pour ajouter") : sub)),
+    h("button", { className: "acc-pin-x", title: tr("Retirer de l'accueil"), onClick: (e) => { e.stopPropagation(); window.AccueilCore?.unpinUri?.(item.uri); } }, "×"),
+    h("button", { className: "acc-round", title: tr("Lire"), onClick: (e) => { e.stopPropagation(); playPinned(item); } }, h(PlayIcon))));
 }
 
 const PIN_SLOTS = 3;
 
 // Emplacement libre : carte en pointillé qui explique comment épingler.
 function PinSlot() {
-  return h("div", { className: "acc-slot", title: "Clic droit sur une playlist, un album, un artiste ou un dossier → « Épingler sur l'accueil »" },
+  return h("div", { className: "acc-slot", title: tr("Clic droit sur une playlist, un album, un artiste ou un dossier → « Épingler sur l'accueil »") },
     h("div", { className: "acc-slot-plus" }, "+"),
     h("div", { className: "acc-liked-text" },
-      h("div", { className: "acc-liked-title" }, "Épingle une playlist"),
-      h("div", { className: "acc-sub" }, "Clic droit → Épingler sur l'accueil")));
+      h("div", { className: "acc-liked-title" }, tr("Épingle une playlist")),
+      h("div", { className: "acc-sub" }, tr("Clic droit → Épingler sur l'accueil"))));
 }
 
 function PinnedHeroes({ main }) {
   const pinned = usePins();
-  const shown = (pinned || []).filter((i) => pinGroup(i) === main);
+  // Musique : 3 emplacements au plus (Titres likés en plus) ; au-delà, seules les 3 premières.
+  let kept = 0;
+  const shown = (pinned || []).filter((i) => pinGroup(i) === main && (main !== "music" || i.type === "liked" || ++kept <= PIN_SLOTS));
   const [drag, setDrag] = useState(null); // { uri, target, side }
   const reorder = {
     start: (uri) => setDrag({ uri }),
@@ -1257,8 +1413,7 @@ function PinnedHeroes({ main }) {
       setDrag(null);
     },
   };
-  // Musique : jusqu'à 3 épingles, les places libres s'affichent en pointillé pour montrer qu'on
-  // choisit ce qui va là (au-delà de 3, plus d'emplacement vide).
+  // Musique : les places libres sur les 3 s'affichent en pointillé, pour montrer qu'on choisit ce qui va là.
   const free = main === "music" && pinned ? Math.max(0, PIN_SLOTS - shown.filter((i) => i.type !== "liked").length) : 0;
   const slots = Array.from({ length: free }, (_, k) => h(PinSlot, { key: "slot" + k }));
   const cards = shown.map((i) => (i.type === "liked" ? h(LikedHero, { key: i.uri, reorder, drag }) : h(PinHero, { key: i.uri, item: i, reorder, drag })));
@@ -1266,7 +1421,7 @@ function PinnedHeroes({ main }) {
   if (likedAt >= 0) cards.splice(likedAt, 0, ...slots); else cards.push(...slots);
   return h("div", { className: "acc-heroes" },
     cards,
-    main === "podcasts" && pinned && !shown.length && h("div", { className: "acc-pin-hint" }, "Clic droit sur une émission ou un livre audio → « Épingler sur l'accueil » pour le retrouver ici."),
+    main === "podcasts" && pinned && !shown.length && h("div", { className: "acc-pin-hint" }, tr("Clic droit sur une émission ou un livre audio → « Épingler sur l'accueil » pour le retrouver ici.")),
     !pinned && main === "music" && h(LikedHero, { reorder, drag }));
 }
 
@@ -1274,7 +1429,7 @@ async function fetchAudiobooks() {
   const r = await Spicetify.Platform.LibraryAPI.getContents({ filters: ["4"], limit: 200 });
   return (r.items || []).filter((i) => i.type === "audiobook").map((i) => ({
     uri: i.uri, name: i.name, img: i.images?.[0]?.url || null,
-    sub: (i.authors || []).map((a) => a.name).join(", ") || "Livre audio",
+    sub: (i.authors || []).map((a) => a.name).join(", ") || tr("Livre audio"),
   }));
 }
 
@@ -1285,14 +1440,14 @@ function Audiobooks() {
   const suggested = useMemo(() => (home.data ? sectionsFor(AUDIOBOOK_TABS[0], AUDIOBOOK_TABS, home.data) : []), [home.data]);
   return h(React.Fragment, null,
     h(Status, { state: mine }, () => mine.data.length
-      ? h(Section, { title: "Mes livres audio", items: mine.data, limit: 12 })
-      : h("div", { className: "acc-hint acc-note" }, "Aucun livre audio dans ta bibliothèque : en voici quelques-uns pour toi.")),
+      ? h(Section, { title: tr("Mes livres audio"), items: mine.data, limit: 12 })
+      : h("div", { className: "acc-hint acc-note" }, tr("Aucun livre audio dans ta bibliothèque : en voici quelques-uns pour toi."))),
     h(Status, { state: home }, () => suggested.map((sec) => h(Section, { key: sec.title, title: sec.title, items: sec.items, limit: 12 }))));
 }
 
 const MAIN_TABS = [
-  { id: "music", label: "Musique", tabs: MUSIC_TABS, facet: "music-chip" },
-  { id: "podcasts", label: "Podcasts & livres", tabs: PODCAST_TABS, facet: "podcasts-chip" },
+  { id: "music", label: tr("Musique"), tabs: MUSIC_TABS, facet: "music-chip" },
+  { id: "podcasts", label: tr("Podcasts & livres"), tabs: PODCAST_TABS, facet: "podcasts-chip" },
 ];
 
 function AccueilApp() {
@@ -1309,7 +1464,7 @@ function AccueilApp() {
   if (disco) {
     return h("div", { className: "acc-page" },
       h("style", null, CSS),
-      h("button", { className: "acc-link acc-back", onClick: () => Spicetify.Platform.History.goBack() }, "← Retour"),
+      h("button", { className: "acc-link acc-back", onClick: () => Spicetify.Platform.History.goBack() }, tr("← Retour")),
       h(Discography, { key: disco[1], id: disco[1] }));
   }
 
@@ -1348,14 +1503,15 @@ header[data-testid="topbar"] { display: none !important; }
    passent à la ligne entre elles (toujours à droite). Sous les onglets seulement en fenêtre étroite. */
 .acc-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
 @media (max-width: 1000px) { .acc-header { flex-wrap: wrap; } .acc-heroes { justify-content: flex-start; } }
-.acc-main-tabs { display: flex; gap: 28px; }
+.acc-main-tabs { display: flex; gap: 28px; flex: none; white-space: nowrap; }
 .acc-main-tab { background: none; border: 0; padding: 4px 0; color: var(--acc-sub); font-size: 2rem; font-weight: 700; letter-spacing: -.02em; cursor: pointer; border-bottom: 3px solid transparent; }
 .acc-main-tab:hover { color: var(--acc-text); }
 .acc-main-tab.is-on { color: var(--acc-text); border-bottom-color: var(--acc-green); }
-.acc-liked { display: flex; align-items: center; gap: 14px; padding: 8px 10px 8px 8px; flex: 0 1 300px; min-width: 220px; border-radius: 8px; background: var(--acc-chip); cursor: pointer; }
+.acc-liked { display: flex; align-items: center; gap: 14px; padding: 8px 10px 8px 8px; flex: 0 1 300px; min-width: 0; border-radius: 8px; background: var(--acc-chip); cursor: pointer; }
 .acc-liked:hover { background: var(--acc-chip-hover); }
 .acc-liked-art { width: 56px; height: 56px; flex: none; border-radius: 4px; display: grid; place-items: center; background: linear-gradient(135deg, #450af5, #c4efd9); }
-.acc-liked-text { flex: 1; min-width: 0; }
+.acc-liked-text { flex: 1; min-width: 0; overflow: hidden; }
+.acc-liked-text .acc-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 .acc-liked-title { font-weight: 700; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .acc-liked-text .acc-sub { -webkit-line-clamp: 1; }
 .acc-round { width: 44px; height: 44px; flex: none; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--acc-green); color: #000; cursor: pointer; transition: transform .1s; }
@@ -1407,12 +1563,13 @@ header[data-testid="topbar"] { display: none !important; }
 .acc-tidy-name { font-weight: 600; cursor: pointer; color: inherit; }
 .acc-tidy-name:hover { text-decoration: underline; }
 .acc-tidy-note { margin-top: 14px; }
-.acc-slot { display: flex; align-items: center; gap: 14px; padding: 8px 10px 8px 8px; flex: 0 1 300px; min-width: 220px; border-radius: 8px; border: 1.5px dashed rgba(255,255,255,.22); color: var(--acc-sub); cursor: help; }
+.acc-slot { display: flex; align-items: center; gap: 14px; padding: 8px 10px 8px 8px; flex: 0 1 300px; min-width: 0; border-radius: 8px; border: 1.5px dashed rgba(255,255,255,.22); color: var(--acc-sub); cursor: help; }
 .acc-slot:hover { border-color: rgba(255,255,255,.45); color: var(--acc-text); }
 .acc-slot-plus { width: 56px; height: 56px; flex: none; border-radius: 4px; display: grid; place-items: center; border: 1.5px dashed rgba(255,255,255,.22); font-size: 1.5rem; font-weight: 300; }
 .acc-slot .acc-liked-title { color: inherit; }
 .acc-pin-hint { display: flex; align-items: center; max-width: 320px; padding: 10px 14px; border: 1px dashed rgba(255,255,255,.2); border-radius: 8px; color: var(--acc-sub); font-size: .8125rem; }
-.acc-heroes { display: flex; gap: 12px; flex-wrap: wrap; justify-content: flex-end; flex: 1 1 auto; min-width: 0; }
+/* Une seule ligne, toujours : au plus 3 épingles + Titres likés, qui rétrécissent au besoin. */
+.acc-heroes { display: flex; gap: 12px; flex-wrap: nowrap; justify-content: flex-end; flex: 1 1 auto; min-width: 0; }
 .acc-liked-art.is-season { background: linear-gradient(135deg, #b3541e, #f2c14e); overflow: hidden; }
 .acc-liked-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .acc-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; margin-bottom: 18px; }

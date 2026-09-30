@@ -12,8 +12,46 @@
 //    de la page, choisis au clic droit (« Épingler sur l'accueil »).
 // 5. Vérifie les API internes de Spotify dont dépend le thème et signale celles qui manquent
 //    (elles changent parfois avec les mises à jour de Spotify).
+// Langue : français si Spotify est en français, anglais sinon ; accueil:lang ("fr" | "en") force une
+// langue. Calculée à chaque appel (Spicetify.Locale n'est pas toujours prêt au démarrage).
+const ACCUEIL_EN = {
+  "Écouter plus tard": "Listen later",
+  "Retirer de « Plus tard »": "Remove from Later",
+  "Épingler sur l'accueil": "Pin to home",
+  "Retirer de l'accueil": "Unpin from home",
+  "Discographie complète": "Full discography",
+  "Épinglé sur l'accueil": "Pinned to home",
+  "Accueil complet (3 épingles) : retire une épingle d'abord": "Home is full (3 pins): unpin one first",
+  "Ajouté à « Plus tard »": "Added to Later",
+  "{n} éléments ajoutés à « Plus tard »": "{n} items added to Later",
+  "Déjà dans « Plus tard »": "Already in Later",
+  "Discographie indisponible : {error}": "Discography unavailable: {error}",
+  "Thème Compact : API Spotify introuvables ({list}), l'accueil ne peut pas démarrer": "Compact theme: Spotify APIs not found ({list}), the home page can't start",
+  "Thème Compact : Spotify a changé des API internes ({list})": "Compact theme: Spotify changed some internal APIs ({list})",
+  "Nouvelle saison : {name} créée et épinglée": "New season: {name} created and pinned",
+  "{name} épinglée": "{name} pinned",
+  " · {moved} rangée dans SAISONS": " · {moved} filed in SAISONS",
+  "Artiste": "Artist",
+  "artiste introuvable": "artist not found",
+  "type non pris en charge": "unsupported type",
+  "accueil Spotify": "Spotify home",
+  "bibliothèque": "library",
+  "saisons": "seasons",
+  "lecture": "playback",
+  "file d'attente": "queue",
+};
+function accueilLang() {
+  try { const forced = Spicetify.LocalStorage?.get("accueil:lang"); if (forced === "fr" || forced === "en") return forced; } catch {}
+  return String(Spicetify.Locale?.getLocale?.() || navigator.language || "en").toLowerCase().startsWith("fr") ? "fr" : "en";
+}
+function accueilT(fr, vars) {
+  let text = accueilLang() === "en" && ACCUEIL_EN[fr] !== undefined ? ACCUEIL_EN[fr] : fr;
+  if (vars) text = text.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
+  return text;
+}
+
 (function accueilCore(tries = 0) {
-  const missingOf = (list) => list.filter(([, get]) => { try { return !get(); } catch { return true; } }).map(([name]) => name);
+  const missingOf = (list) => list.filter(([, get]) => { try { return !get(); } catch { return true; } }).map(([name]) => accueilT(name));
   const BASE = [
     ["History", () => Spicetify.Platform.History],
     ["LibraryAPI", () => Spicetify.Platform.LibraryAPI],
@@ -26,7 +64,7 @@
     // ~20 s sans ces API : ce n'est plus un chargement lent, Spotify les a changées.
     if (tries === 66) {
       console.warn("[accueil] API introuvables :", base.join(", "));
-      Spicetify.showNotification?.(`Thème Compact : API Spotify introuvables (${base.join(", ")}), l'accueil ne peut pas démarrer`, true);
+      Spicetify.showNotification?.(accueilT("Thème Compact : API Spotify introuvables ({list}), l'accueil ne peut pas démarrer", { list: base.join(", ") }), true);
     }
     setTimeout(() => accueilCore(tries + 1), 300);
     return;
@@ -158,7 +196,7 @@
     seasonPins(current.uri, previous.map((p) => p.uri));
     window.dispatchEvent(new Event("accueil:season"));
     const moved = previous.map((p) => p.name).join(", ");
-    Spicetify.showNotification?.(`${created ? "Nouvelle saison : " + name + " créée et épinglée" : name + " épinglée"}${moved ? " · " + moved + " rangée dans SAISONS" : ""}`);
+    Spicetify.showNotification?.((created ? accueilT("Nouvelle saison : {name} créée et épinglée", { name }) : accueilT("{name} épinglée", { name })) + (moved ? accueilT(" · {moved} rangée dans SAISONS", { moved }) : ""));
   }
 
   window.AccueilCore = { currentSeason, normName, missing: [] };
@@ -208,7 +246,7 @@
     const key = `${P().version || "?"}|${missing.join(",")}`;
     if (Spicetify.LocalStorage.get("accueil:health") === key) return;
     Spicetify.LocalStorage.set("accueil:health", key);
-    Spicetify.showNotification?.(`Thème Compact : Spotify a changé des API internes (${missing.join(", ")})`, true);
+    Spicetify.showNotification?.(accueilT("Thème Compact : Spotify a changé des API internes ({list})", { list: missing.join(", ") }), true);
   }, 10000);
 
   // ---------- 6. écouter plus tard, discographie ----------
@@ -237,12 +275,12 @@
     const [, type, id] = uri.split(":");
     if (type === "track") { const j = await spMeta("track", id); return { name: j.name, sub: artistNames(j), img: image(j.album?.cover_group), kind: "track" }; }
     if (type === "album") { const j = await spMeta("album", id); return { name: j.name, sub: artistNames(j), img: image(j.cover_group), kind: "album" }; }
-    if (type === "artist") { const j = await spMeta("artist", id); return { name: j.name, sub: "Artiste", img: image(j.portrait_group), kind: "artist", round: true }; }
+    if (type === "artist") { const j = await spMeta("artist", id); return { name: j.name, sub: accueilT("Artiste"), img: image(j.portrait_group), kind: "artist", round: true }; }
     if (type === "playlist") {
       const m = await Spicetify.Platform.PlaylistAPI.getMetadata(uri);
       return { name: m.name, sub: m.owner?.displayName || "Playlist", img: m.images?.[0]?.url || null, kind: "playlist" };
     }
-    throw new Error("type non pris en charge");
+    throw new Error(accueilT("type non pris en charge"));
   }
 
   async function addLater(uris) {
@@ -251,7 +289,7 @@
     const described = await Promise.all(fresh.map((uri) => describe(uri).then((d) => ({ uri, ...d, addedAt: Date.now() }), (e) => { warn("plus tard")(e); return null; })));
     const added = described.filter(Boolean);
     if (added.length) writeLater([...added, ...readLater()]);
-    Spicetify.showNotification?.(added.length ? `${added.length > 1 ? added.length + " éléments ajoutés" : "Ajouté"} à « Plus tard »` : "Déjà dans « Plus tard »");
+    Spicetify.showNotification?.(added.length ? (added.length > 1 ? accueilT("{n} éléments ajoutés à « Plus tard »", { n: added.length }) : accueilT("Ajouté à « Plus tard »")) : accueilT("Déjà dans « Plus tard »"));
   }
   const removeLater = (uris) => writeLater(readLater().filter((i) => !uris.includes(i.uri)));
   const inLater = (uri) => readLater().some((i) => i.uri === uri);
@@ -281,7 +319,7 @@
     } catch (e) { warn("discographie : artiste (GraphQL)")(e); }
     const j = await spMeta(type, id);
     const gid = j.artist?.[0]?.gid;
-    if (!gid) throw new Error("artiste introuvable");
+    if (!gid) throw new Error(accueilT("artiste introuvable"));
     return Spicetify.URI.hexToId(gid);
   }
 
@@ -299,17 +337,17 @@
       else console.warn("[accueil] Spicetify.ContextMenu introuvable : pas d'entrées clic droit");
       return;
     }
-    new Spicetify.ContextMenu.Item("Écouter plus tard", (uris) => addLater(uris).catch(warn("plus tard")),
+    new Spicetify.ContextMenu.Item(accueilT("Écouter plus tard"), (uris) => addLater(uris).catch(warn("plus tard")),
       (uris) => uris.every((u) => LATER_TYPES.test(u)) && !uris.every(inLater), clock).register();
-    new Spicetify.ContextMenu.Item("Retirer de « Plus tard »", (uris) => removeLater(uris),
+    new Spicetify.ContextMenu.Item(accueilT("Retirer de « Plus tard »"), (uris) => removeLater(uris),
       (uris) => uris.every(inLater), clock).register();
-    new Spicetify.ContextMenu.Item("Épingler sur l'accueil", (uris) => pinUri(uris[0]),
+    new Spicetify.ContextMenu.Item(accueilT("Épingler sur l'accueil"), (uris) => pinUri(uris[0]),
       (uris) => uris.length === 1 && PIN_TYPES.test(uris[0]) && !isPinned(uris[0]), pinIcon).register();
-    new Spicetify.ContextMenu.Item("Retirer de l'accueil", (uris) => unpinUri(uris[0]),
+    new Spicetify.ContextMenu.Item(accueilT("Retirer de l'accueil"), (uris) => unpinUri(uris[0]),
       (uris) => uris.length === 1 && isPinned(uris[0]), pinIcon).register();
-    new Spicetify.ContextMenu.Item("Discographie complète", (uris) => artistOf(uris[0]).then(
+    new Spicetify.ContextMenu.Item(accueilT("Discographie complète"), (uris) => artistOf(uris[0]).then(
       (id) => History.push(`/accueil/discographie/${id}`),
-      (e) => { warn("discographie")(e); Spicetify.showNotification?.(`Discographie indisponible : ${e?.message || e}`, true); }),
+      (e) => { warn("discographie")(e); Spicetify.showNotification?.(accueilT("Discographie indisponible : {error}", { error: e?.message || e }), true); }),
       (uris) => uris.length === 1 && /^spotify:(artist|album|track):/.test(uris[0]), disc).register();
   };
   fetch("/spicetify-routes-accueil.js")
@@ -363,11 +401,24 @@
     const list = readPins();
     if (list) writePins([current, ...list.filter((u) => u !== current && !previous.includes(u))]);
   }
-  function pinUri(uri) {
+  // Onglet Musique : 3 emplacements au plus (Titres likés à part). Les épingles de podcasts (émissions,
+  // épisodes enregistrés) vont dans l'onglet Podcasts et ne comptent pas.
+  const PIN_SLOTS = 3;
+  async function pinUri(uri) {
     const list = readPins() || [];
+    const podcast = (u) => /^spotify:(show|episode):/.test(u);
+    if (!podcast(uri) && !list.includes(uri)) {
+      let episodes = null;
+      try { episodes = (await Spicetify.Platform.LibraryAPI.getContents({ limit: 50 })).items.find((i) => i.type === "your-episodes")?.uri; } catch {}
+      const music = list.filter((u) => u !== "accueil:liked" && u !== episodes && !podcast(u));
+      if (music.length >= PIN_SLOTS) {
+        Spicetify.showNotification?.(accueilT("Accueil complet (3 épingles) : retire une épingle d'abord"), true);
+        return;
+      }
+    }
     // Titres likés (pseudo-épingle "accueil:liked") en dernier : la nouvelle épingle se place avant.
     if (!list.includes(uri)) writePins(list.at(-1) === "accueil:liked" ? [...list.slice(0, -1), uri, "accueil:liked"] : [...list, uri]);
-    Spicetify.showNotification?.("Épinglé sur l'accueil");
+    Spicetify.showNotification?.(accueilT("Épinglé sur l'accueil"));
   }
   function unpinUri(uri) { writePins((readPins() || []).filter((u) => u !== uri)); }
   function isPinned(uri) { return (readPins() || []).includes(uri); }

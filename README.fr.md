@@ -17,7 +17,7 @@ Pour **Spotify sur ordinateur, version téléchargée sur spotify.com** (pas cel
 - **Nombre d'écoutes** sur chaque playlist et chaque album, et tri « Plus écoutées ».
 - **Suggestions de rangement** (bouton « Ranger » de Mes playlists) : playlists dont les artistes relèvent surtout d'un autre dossier de style, playlists en vrac à la racine au style net, playlists pas écoutées depuis plus d'un an (quand Spotify connaît la date). Pour chacune : « Déplacer vers… » (ou « Archiver », dans un dossier `ARCHIVES`) et « Ignorer ». Rien ne bouge sans ton clic.
 - **Mes albums par date de sortie** : tris « Sortie ↓ » et « Sortie ↑ ».
-- **Tes 3 playlists préférées épinglées en haut** : des emplacements vides en pointillé montrent où elles vont. Clic droit sur une playlist, un album, un artiste, une émission ou un dossier → « Épingler sur l'accueil » (plus de 3, ça marche aussi). Glisse une carte, Titres likés compris, pour changer l'ordre. Les titres likés sont toujours là, avec lecture ou aléatoire.
+- **Tes 3 playlists préférées épinglées en haut** : des emplacements vides en pointillé montrent où elles vont. Clic droit sur une playlist, un album, un artiste, une émission ou un dossier → « Épingler sur l'accueil » (3 emplacements, toujours sur une ligne, à côté de Titres likés). Glisse une carte, Titres likés compris, pour changer l'ordre. Les titres likés sont toujours là, avec lecture ou aléatoire.
 
 ### Lecture plein écran
 Le bouton plein écran de la barre du lecteur (ou ⤢ du panneau En cours de lecture) ouvre une vue plein écran : pochette en grand, contrôles, **paroles synchronisées** (clic sur une ligne pour s'y rendre) et liste **À suivre** (clic sur un titre pour y sauter). Échap pour fermer.
@@ -69,6 +69,10 @@ Revenir au Spotify d'origine : `spicetify restore`.
 - **Styles** : sans dossiers, pas de filtres par style (une astuce le rappelle) — tout le reste fonctionne. Un style = un dossier de premier niveau de ta bibliothèque, détecté automatiquement (sauf `SAISONS`). Les albums, mix et découvertes sont classés d'après leurs artistes, et ce qui ne rentre dans aucun style va dans « Mixte ». Pour ne garder que certains dossiers ou changer leur nom affiché, édite `STYLE_LABELS` au début de `CustomApps/accueil/index.js` (dans `%APPDATA%\spicetify` sous Windows, `~/.config/spicetify` sur Mac), puis `spicetify apply` : dès qu'un dossier de cette liste existe, seuls ceux de la liste comptent. L'analyse est refaite chaque semaine.
 - **Saisons automatiques** : ne s'activent que si tu as un dossier `SAISONS` à la racine de ta bibliothèque. Sans ce dossier, rien n'est créé.
 - **Épingles** : au premier lancement, elles reprennent les éléments épinglés de ta bibliothèque Spotify, puis c'est toi qui choisis.
+
+## Langue
+
+Français si Spotify est en français, anglais sinon. Pour forcer une langue, ouvre la console (`spicetify enable-devtools`, puis clic droit → Inspecter) et lance `localStorage.setItem("accueil:lang", "fr")` (ou `"en"`), puis recharge avec Ctrl/Cmd+R. Les noms de styles viennent de tes dossiers et ne sont pas traduits.
 
 ## Gardé sur cet ordinateur
 
