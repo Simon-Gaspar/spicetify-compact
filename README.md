@@ -2,7 +2,8 @@
 
 **English** · [Français](README.fr.md)
 
-![Preview](preview.png)
+![Home page](preview.png)
+![Stats page](preview-stats.png)
 
 A Spotify built around **your** library: a custom home page instead of recommendations, a fullscreen now-playing view with lyrics, and an interface stripped of what you don't use.
 

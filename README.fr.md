@@ -2,7 +2,8 @@
 
 [English](README.md) · **Français**
 
-![Aperçu](preview.png)
+![Page d'accueil](preview.png)
+![Page Stats](preview-stats.png)
 
 Un Spotify centré sur **ta** bibliothèque : un accueil sur mesure à la place des recommandations, une vue de lecture plein écran avec paroles, et une interface débarrassée de ce qui ne sert pas.
 
