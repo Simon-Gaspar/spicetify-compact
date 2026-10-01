@@ -1,7 +1,7 @@
 {
-  "version": "1.4.1",
+  "version": "1.5.0",
   "notes": {
-    "fr": "Avis de mise à jour plus réactif : vérifié à chaque démarrage puis toutes les 6 h, au lieu d'une réponse gardée 24 h.",
-    "en": "Faster update notice: checked at every start, then every 6 hours, instead of an answer kept for 24 hours."
+    "fr": "Filtres par ambiance (Dansant, Chill, Concentration…) d'après les données audio de Spotify, dans Mes playlists, Mes albums et les recommandations : sélecteur « Styles | Ambiances ».",
+    "en": "Mood filters (Danceable, Chill, Focus…) from Spotify's audio data, in My playlists, My albums and recommendations: “Styles | Moods” switch."
   }
 }

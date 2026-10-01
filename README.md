@@ -19,6 +19,7 @@ For the **Spotify desktop app downloaded from spotify.com** (not the Microsoft S
 - **Style filters** in every sub-menu, with a ▶ to shuffle a whole style. Styles come from your folders (see [Adapting it to your library](#adapting-it-to-your-library)).
   - **Sub-filters**: pick a style and its subfolders show up as a second row (Hip-hop › Trap US), each with its own ▶.
   - **Mixed playlists** (two clear styles, neither dominant, e.g. rap + electro) show up under both filters, wherever they're filed.
+- **Mood filters**: the *Styles | Moods* switch at the start of the filter row swaps the chips for moods — Danceable, Upbeat, Intense, Feel good, Chill, Soft / Melancholic, Acoustic, Focus, Varied — in My playlists, My albums and Spotify's recommendations (mixes, new releases, discover). They come from Spotify's own audio features (energy, valence, danceability, acousticness, instrumentalness): each track gets a mood, and a playlist or album takes the one or two that cover a real share of its tracks, otherwise *Varied*. Thresholds are relative to your library. The ▶ of a mood shuffles only the tracks that have it.
 - **Play counts** on every playlist and album, and a *Most played* sort.
 - **Tidy-up suggestions** (*Tidy up* button in My playlists):
   - playlists whose artists mostly belong to another style folder;
@@ -128,7 +129,7 @@ This data stays in Spotify on the computer where the theme is installed. It does
 | Play counts | One play = one time you start the playlist or album, on any device (Spotify syncs the last-played date). Two plays less than 30 min apart count as one. Counting starts at install. |
 | Listen later | The *Listen later* list. |
 | Pins | The cards at the top of the home page. |
-| Styles, release dates | Cached for speed (styles are recomputed every week). |
+| Styles, moods, release dates | Cached for speed (styles and moods are recomputed every week). |
 | Listening stats | Every play recorded since install, plus your imported history (IndexedDB `accueil-stats`). |
 
 ## Troubleshooting
@@ -140,4 +141,5 @@ This data stays in Spotify on the computer where the theme is installed. It does
 
 - No filter for AI-generated tracks: Spotify doesn't expose that information.
 - The theme relies on Spotify's internal APIs, which sometimes change with its updates.
+- Moods use an undocumented Spotify endpoint (Spotify withdrew audio features from its public API in 2024). If it stops answering, the home page says so and the mood filters stay empty; everything else keeps working.
 - Spicetify modifies the Spotify app. Spotify's terms of use don't allow that, although it's almost never enforced. Use at your own discretion.

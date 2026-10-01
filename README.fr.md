@@ -17,6 +17,7 @@ Pour **Spotify sur ordinateur, version téléchargée sur spotify.com** (pas cel
 - **Filtres par style** dans chaque sous-menu, avec un ▶ pour lancer tout un style en aléatoire. Les styles viennent de tes dossiers (voir [À adapter](#à-adapter-à-ta-bibliothèque)).
   - **Sous-filtres** : choisis un style, ses sous-dossiers apparaissent sur une deuxième ligne (Hip-hop › Trap US), chacun avec son ▶.
   - **Playlists mixtes** (deux styles nets, aucun majoritaire, par exemple rap + électro) : elles apparaissent sous les deux filtres, où qu'elles soient rangées.
+- **Filtres par ambiance** : le sélecteur « Styles | Ambiances » au début de la ligne de filtres remplace les chips par des ambiances — Dansant, Festif, Intense, Feel good, Chill, Doux / Mélancolique, Acoustique, Concentration, Variée — dans Mes playlists, Mes albums et les recommandations de Spotify (mix, nouveautés, découvrir). Elles viennent des caractéristiques audio de Spotify (énergie, valence, dansabilité, côté acoustique ou instrumental) : chaque titre reçoit une ambiance, et une playlist ou un album prend celle(s) qui couvrent une vraie part de ses titres, sinon « Variée ». Les seuils sont relatifs à ta bibliothèque. Le ▶ d'une ambiance lance en aléatoire seulement les titres qui l'ont.
 - **Nombre d'écoutes** sur chaque playlist et chaque album, et tri « Plus écoutées ».
 - **Suggestions de rangement** (bouton « Ranger » de Mes playlists) : playlists dont les artistes relèvent surtout d'un autre dossier de style, playlists en vrac à la racine au style net, playlists pas écoutées depuis plus d'un an (quand Spotify connaît la date), **sous-dossiers à créer** dans un dossier de style trop large (groupes de playlists qui partagent leurs artistes, les artistes rares comptant plus ; nom proposé modifiable, playlists à retirer d'un clic avant « Créer le sous-dossier »), et playlists à la racine d'un style proches d'un de ses sous-dossiers existants. Pour chacune : « Déplacer vers… » (ou « Archiver », dans un dossier `ARCHIVES`) et « Ignorer ». Rien ne bouge sans ton clic.
 - **Mes albums par date de sortie** : tris « Sortie ↓ » et « Sortie ↑ ».
@@ -106,7 +107,7 @@ Ces données restent dans Spotify sur l'ordinateur où le thème est installé :
 | Écoutes | Une écoute = une fois où tu lances la playlist ou l'album, sur n'importe quel appareil (Spotify synchronise la date de dernière écoute). Deux écoutes à moins de 30 min comptent pour une ; compté à partir de l'installation. |
 | Plus tard | La liste « Écouter plus tard ». |
 | Épingles | Les cartes du haut de l'accueil. |
-| Styles, dates de sortie | Mis en cache pour aller vite (styles refaits chaque semaine). |
+| Styles, ambiances, dates de sortie | Mis en cache pour aller vite (styles et ambiances refaits chaque semaine). |
 | Stats d'écoute | Chaque écoute notée depuis l'installation, plus l'historique importé (IndexedDB `accueil-stats`). |
 
 ## En cas de souci
@@ -118,4 +119,5 @@ Ces données restent dans Spotify sur l'ordinateur où le thème est installé :
 
 - Pas de filtre des morceaux générés par IA : Spotify n'expose pas cette information.
 - Le thème s'appuie sur des API internes de Spotify, qui changent parfois avec ses mises à jour.
+- Les ambiances passent par un endpoint non documenté de Spotify (qui a retiré les caractéristiques audio de son API publique en 2024). S'il ne répond plus, l'accueil le signale et les filtres par ambiance restent vides ; tout le reste continue de marcher.
 - Spicetify modifie l'app Spotify, ce que les conditions d'utilisation de Spotify n'autorisent pas (ce n'est quasiment jamais appliqué). À utiliser en connaissance de cause.

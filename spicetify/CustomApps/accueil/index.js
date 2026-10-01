@@ -219,6 +219,25 @@ const EN = {
   "Rangement impossible : ": "Couldn't move: ",
   "Rien à afficher ici pour le moment.": "Nothing to show here yet.",
   "Rien dans ce style ici.": "Nothing in this style here.",
+  "Rien dans cette ambiance ici.": "Nothing with this mood here.",
+  "Styles": "Styles",
+  "Ambiances": "Moods",
+  "D'après les dossiers de ta bibliothèque": "Based on your library's folders",
+  "D'après les caractéristiques audio de Spotify : énergie, valence (joyeux ↔ triste), dansabilité…": "Based on Spotify's audio features: energy, valence (happy ↔ sad), danceability…",
+  "Analyse des ambiances de ta bibliothèque… {done}/{total} playlists (une fois par semaine)": "Analyzing your library's moods… {done}/{total} playlists (once a week)",
+  "Ambiances indisponibles : {error}": "Moods unavailable: {error}",
+  "Lecture des ambiances…": "Reading moods…",
+  "aucun titre dans cette ambiance": "no track with this mood",
+  "aucun titre analysable": "no track could be analyzed",
+  "Dansant": "Danceable",
+  "Festif": "Upbeat",
+  "Intense": "Intense",
+  "Feel good": "Feel good",
+  "Chill": "Chill",
+  "Doux / Mélancolique": "Soft / Melancholic",
+  "Acoustique": "Acoustic",
+  "Concentration": "Focus",
+  "Variée": "Varied",
   "Mixte": "Mixed",
   "Lecture impossible : ": "Can't play: ",
   "Aujourd'hui": "Today",
@@ -334,7 +353,8 @@ function lsSet(key, value) {
 // une valeur par défaut dans SETTINGS_DEFAULTS et une ligne dans SETTINGS. Ceux marqués « core »
 // sont lus par l'extension accueil-core.js (accueilSetting), avec les mêmes valeurs par défaut.
 const SETTINGS_KEY = "accueil:settings";
-const SETTINGS_DEFAULTS = { splitPlaylists: true, showPlays: true, showSidebar: false, seasons: true, updateCheck: true, recordPlays: true };
+// chipAxis : sélecteur Styles | Ambiances des barres de chips (pas dans le panneau, il se règle sur place).
+const SETTINGS_DEFAULTS = { splitPlaylists: true, showPlays: true, showSidebar: false, seasons: true, updateCheck: true, recordPlays: true, chipAxis: "styles" };
 const SETTINGS = [
   { section: "Affichage", items: [
     { key: "splitPlaylists", label: "Séparer les playlists par propriétaire", desc: "Mes playlists en trois colonnes : les tiennes, celles des autres, celles de Spotify. Désactivé : une seule grille." },
@@ -495,6 +515,126 @@ async function styleOf(card, idx) {
   styleSaveTimer = setTimeout(() => lsSet(STYLE_KEY, idx), 2000);
   return style;
 }
+
+// ---------- ambiances ----------
+// D'après les caractéristiques audio de Spotify : l'endpoint interne audio-attributes (celui de l'app ;
+// l'API publique les refuse aux applis tierces depuis 2024). Chaque titre reçoit une ambiance selon
+// son énergie, sa valence (joyeux ↔ triste), sa dansabilité, son côté acoustique ou instrumental. Un
+// élément (playlist, album, artiste) prend celles qui couvrent au moins 35 % de ses titres (deux au
+// plus, la première pouvant se contenter de 25 %), sinon « Variée ». Les seuils sont relatifs à la
+// bibliothèque — « énergique » veut dire énergique pour toi — et refaits chaque semaine avec l'index.
+const MOODS = ["Dansant", "Festif", "Intense", "Feel good", "Chill", "Doux / Mélancolique", "Acoustique", "Concentration"];
+const VARIED = "Variée";
+const MOOD_KEY = "accueil:moods";
+const MOOD_V = 1;
+const MOOD_TTL = 7 * 86400000;
+let moodIndexPromise = null;
+let moodProgress = null; // { done, total } pendant la construction de l'index
+let moodError = null; // message si Spotify ne fournit plus les caractéristiques audio
+const moodListeners = new Set();
+const notifyMoods = () => moodListeners.forEach((f) => f());
+
+async function audioFeatures(trackUris) {
+  const ids = [...new Set(trackUris.filter((u) => u?.startsWith("spotify:track:")).map((u) => u.split(":")[2]))];
+  const token = Spicetify.Platform.AuthorizationAPI.getState().token.accessToken;
+  const out = [];
+  for (let i = 0; i < ids.length; i += 30) { // 30 titres par requête au plus
+    const r = await fetch(`https://spclient.wg.spotify.com/audio-attributes/v1/audio-features?ids=${ids.slice(i, i + 30).join(",")}`,
+      { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) throw Object.assign(new Error(`caractéristiques audio : HTTP ${r.status}`), { audio: true });
+    out.push(...((await r.json()).audio_features || []).filter(Boolean));
+  }
+  return out;
+}
+
+// Titres d'un élément, pour en lire l'ambiance : 60 premiers d'une playlist, tout l'album, top 10 d'un artiste.
+async function moodTracks(uri) {
+  const [, kind, id] = uri.split(":");
+  const fromGids = (list) => list.map((t) => t.gid && "spotify:track:" + Spicetify.URI.hexToId(t.gid)).filter(Boolean);
+  if (kind === "playlist") return ((await Spicetify.Platform.PlaylistAPI.getContents(uri, { limit: 60 })).items || []).map((i) => i.uri);
+  if (kind === "album") return fromGids(((await spMeta("album", id)).disc || []).flatMap((d) => d.track || []));
+  if (kind === "artist") {
+    const tops = (await spMeta("artist", id)).top_track || [];
+    return fromGids((tops.find((t) => t.country === "FR") || tops[0])?.track || []);
+  }
+  return [];
+}
+
+function trackMood(x, t) {
+  if (x.instrumentalness > 0.5 && x.energy < t.E1) return "Concentration";
+  if (x.energy >= t.E2) return x.danceability >= t.D ? "Dansant" : x.valence >= t.V ? "Festif" : "Intense";
+  if (x.energy < t.E1) return x.acousticness > 0.5 ? "Acoustique" : "Doux / Mélancolique";
+  return x.valence >= t.V ? "Feel good" : "Chill";
+}
+
+// Ambiances d'un élément d'après ses titres : [une ou deux ambiances], [VARIED], ou null (trop peu de titres).
+function moodsOf(features, t) {
+  if (features.length < 5) return null;
+  const count = {};
+  for (const x of features) { const m = trackMood(x, t); count[m] = (count[m] || 0) + 1; }
+  const ranked = Object.entries(count).map(([m, n]) => [m, n / features.length]).sort((a, b) => b[1] - a[1]);
+  const keep = ranked.filter(([, share], i) => share >= 0.35 || (i === 0 && share >= 0.25)).slice(0, 2).map(([m]) => m);
+  return keep.length ? keep : [VARIED];
+}
+
+async function buildMoodIndex() {
+  const lists = (await fetchPlaylists()).map((p) => p.uri);
+  moodProgress = { done: 0, total: lists.length };
+  notifyMoods();
+  const feats = {};
+  let audioError = null;
+  await pool(lists, 6, async (uri) => {
+    try { feats[uri] = await audioFeatures(await moodTracks(uri)); }
+    catch (e) { if (e.audio) audioError = e; else warn("ambiances", e); }
+    finally {
+      moodProgress.done += 1;
+      if (moodProgress.done % 8 === 0) notifyMoods();
+    }
+  });
+  if (audioError && !Object.keys(feats).length) throw audioError; // l'endpoint ne répond plus du tout
+  const all = Object.values(feats).flat();
+  if (!all.length) throw new Error(tr("aucun titre analysable"));
+  const quantile = (k, p) => { const s = all.map((x) => x[k]).sort((a, b) => a - b); return s[Math.floor(p * (s.length - 1))]; };
+  const t = { E1: quantile("energy", 1 / 3), E2: quantile("energy", 2 / 3), V: quantile("valence", 0.5), D: quantile("danceability", 0.7) };
+  const items = {};
+  for (const [uri, f] of Object.entries(feats)) { const m = moodsOf(f, t); if (m) items[uri] = m; }
+  const idx = { v: MOOD_V, at: Date.now(), t, items };
+  lsSet(MOOD_KEY, idx);
+  moodProgress = null;
+  notifyMoods();
+  return idx;
+}
+
+function getMoodIndex() {
+  if (!moodIndexPromise) {
+    const cached = lsGet(MOOD_KEY);
+    moodIndexPromise = cached?.v === MOOD_V && Date.now() - cached.at < MOOD_TTL ? Promise.resolve(cached) : buildMoodIndex();
+    moodIndexPromise.catch((e) => {
+      moodIndexPromise = null;
+      moodProgress = null;
+      moodError = errMsg(e);
+      warn("ambiances", e);
+      // Visible aussi dans le bandeau des API manquantes de l'accueil.
+      const core = window.AccueilCore;
+      if (e.audio && core && !core.missing?.includes("ambiances")) { core.missing = [...(core.missing || []), "ambiances"]; window.dispatchEvent(new Event("accueil:health")); }
+      notifyMoods();
+    });
+  }
+  return moodIndexPromise;
+}
+
+let moodSaveTimer;
+async function moodOf(card, idx) {
+  if (card.uri in idx.items) return idx.items[card.uri];
+  if (!/^spotify:(playlist|album|artist):/.test(card.uri)) return null;
+  const m = moodsOf(await audioFeatures(await moodTracks(card.uri)), idx.t);
+  idx.items[card.uri] = m;
+  clearTimeout(moodSaveTimer);
+  moodSaveTimer = setTimeout(() => lsSet(MOOD_KEY, idx), 2000);
+  return m;
+}
+
+const byMood = (mood, moods) => (c) => mood === "all" || !!moods[c.uri]?.includes(mood);
 
 // Sections de l'accueil Spotify → sous-menus, d'après leur titre, qui dépend de la langue de Spotify
 // (règles en anglais et en français). L'ordre compte : première règle qui matche. Un onglet
@@ -953,6 +1093,76 @@ function useStyles(items) {
     return () => { alive = false; };
   }, [idx, items]);
   return { styles, also: idx?.also || {}, subs: idx?.subs || {}, progress: styleProgress, names: idx?.styles || [] };
+}
+
+// Comme useStyles, pour les ambiances ; ne lance rien tant que le sélecteur est sur « Styles ».
+function useMoods(items, enabled) {
+  const [idx, setIdx] = useState(null);
+  const [moods, setMoods] = useState({});
+  const [, rerender] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    const onChange = () => rerender((x) => x + 1);
+    moodListeners.add(onChange);
+    getMoodIndex().then(setIdx, () => {});
+    return () => moodListeners.delete(onChange);
+  }, [enabled]);
+  useEffect(() => {
+    if (!enabled || !idx || !items?.length) return;
+    let alive = true;
+    const found = {};
+    let flushTimer;
+    const flush = () => alive && setMoods((m) => ({ ...m, ...found }));
+    pool(items, 4, async (c) => {
+      found[c.uri] = await moodOf(c, idx);
+      clearTimeout(flushTimer);
+      flushTimer = setTimeout(flush, 150);
+    }).then(flush);
+    return () => { alive = false; };
+  }, [enabled, idx, items]);
+  return { moods, progress: enabled ? moodProgress : null, error: enabled && !idx ? moodError : null };
+}
+
+// Filtre par ambiance ; le ▶ lance en aléatoire les titres de cette ambiance pris dans les éléments
+// affichés (pas tous leurs titres : seulement ceux qui ont l'ambiance).
+function MoodBar({ items, moods, progress, error, value, onChange }) {
+  const [busy, setBusy] = useState(null);
+  if (progress) return h("div", { className: "acc-hint" }, tr("Analyse des ambiances de ta bibliothèque… {done}/{total} playlists (une fois par semaine)", progress));
+  if (error) return h("div", { className: "acc-hint" }, tr("Ambiances indisponibles : {error}", { error }));
+  const counts = {};
+  for (const c of items) for (const m of moods[c.uri] || []) counts[m] = (counts[m] || 0) + 1;
+  const options = [...MOODS, VARIED].filter((m) => counts[m]);
+  if (!options.length) return h("div", { className: "acc-hint" }, tr("Lecture des ambiances…"));
+  const launch = async (mood) => {
+    setBusy(mood);
+    try { await playMood(mood, items.filter(byMood(mood, moods))); } catch (e) { notify(tr("Lecture impossible : ") + errMsg(e), true); }
+    setBusy(null);
+  };
+  return h("div", { className: "acc-styles" },
+    h("button", { className: "acc-schip" + (value === "all" ? " is-on" : ""), onClick: () => onChange("all") }, tr("Tous"), h("span", { className: "acc-chip-n" }, items.length)),
+    options.map((m) => h("span", { key: m, className: "acc-schip" + (value === m ? " is-on" : "") },
+      m !== VARIED && h("button", { className: "acc-schip-play", title: tr("Lancer tout {style} en aléatoire", { style: tr(m) }), disabled: !!busy, onClick: () => launch(m) }, busy === m ? "…" : h(PlayIcon)),
+      h("button", { className: "acc-schip-label", onClick: () => onChange(m) }, tr(m), h("span", { className: "acc-chip-n" }, counts[m])))));
+}
+
+// Sélecteur Styles | Ambiances, mémorisé (réglage chipAxis) et commun à tous les onglets.
+function AxisSwitch({ axis, onChange }) {
+  const opt = (id, label, title) => h("button", { key: id, className: "acc-axis-opt" + (axis === id ? " is-on" : ""), title, onClick: () => onChange(id) }, label);
+  return h("div", { className: "acc-axis", role: "group" },
+    opt("styles", tr("Styles"), tr("D'après les dossiers de ta bibliothèque")),
+    opt("moods", tr("Ambiances"), tr("D'après les caractéristiques audio de Spotify : énergie, valence (joyeux ↔ triste), dansabilité…")));
+}
+
+// [axe, setAxe] ; resetFilter remet le filtre de l'onglet à « Tous » à chaque changement d'axe,
+// y compris venu d'un autre onglet.
+function useChipAxis(resetFilter) {
+  const [settings, set] = useSettings();
+  const axis = settings.chipAxis === "moods" ? "moods" : "styles";
+  useEffect(() => { resetFilter(); }, [axis]);
+  return [axis, (a) => set({ chipAxis: a })];
+}
+function ChipBar({ axis, setAxis, styleBar, moodBar }) {
+  return h("div", { className: "acc-chipbar" }, h(AxisSwitch, { axis, onChange: setAxis }), axis === "moods" ? h(MoodBar, moodBar) : h(StyleBar, styleBar));
 }
 
 // Dossiers de style de la bibliothèque, par libellé (« Électro » → dossier ELECTRO)
@@ -1429,26 +1639,30 @@ function MyPlaylists() {
   const [settings] = useSettings();
   const columns = settings.splitPlaylists ? COLUMNS : [{ id: "all", label: tr("Toutes les playlists") }];
   const plays = usePlays();
+  const [axis, setAxis] = useChipAxis(() => { setStyle("all"); setSub("all"); });
   const { styles, also, subs, progress, names } = useStyles(state.data);
+  const mood = useMoods(state.data, axis === "moods");
   const sorted = useMemo(() => {
     const list = withPlays(state.data || [], plays);
     if (sort === "az") return list.sort(byName);
     if (sort === "recent") return list.sort(byRecent);
     return list.sort((a, b) => b.n - a.n || byRecent(a, b));
   }, [state.data, sort, plays]);
-  const inStyle = sorted.filter(byStyle(style, styles, also));
-  const shown = style === "all" ? inStyle : inStyle.filter(bySub(style, sub, styles, subs));
+  const inStyle = sorted.filter(axis === "moods" ? byMood(style, mood.moods) : byStyle(style, styles, also));
+  const shown = style === "all" || axis === "moods" ? inStyle : inStyle.filter(bySub(style, sub, styles, subs));
   const since = plays._since ? new Date(plays._since).toLocaleDateString(LOCALE) : null;
   const sorts = PLAYLIST_SORTS.map((o) => (o.id === "top" ? { ...o, title: since ? tr("Écoutes comptées depuis le {since}, tous appareils (une écoute = un lancement), puis par écoute récente", { since }) : tr("Par écoute récente, en attendant le nombre d'écoutes") } : o));
 
   return h(Status, { state }, () =>
     h("section", { className: "acc-section" },
       h(Toolbar, null,
-        h(StyleBar, { items: sorted, styles, also, names, progress, value: style, onChange: (st) => { setStyle(st); setSub("all"); } }),
+        h(ChipBar, { axis, setAxis,
+          styleBar: { items: sorted, styles, also, names, progress, value: style, onChange: (st) => { setStyle(st); setSub("all"); } },
+          moodBar: { items: sorted, ...mood, value: style, onChange: setStyle } }),
         h("div", { className: "acc-sorts" },
           h(Sorts, { options: sorts, value: sort, onChange: setSort }),
           h("button", { className: "acc-sort" + (tidy ? " is-on" : ""), title: tr("Playlists mal rangées, en vrac ou en sommeil, sous-dossiers à créer"), onClick: () => setTidy(!tidy) }, tr("Ranger")))),
-      style !== "all" && h(SubBar, { items: inStyle, style, styles, subs, value: sub, onChange: setSub }),
+      style !== "all" && axis === "styles" && h(SubBar, { items: inStyle, style, styles, subs, value: sub, onChange: setSub }),
       tidy && h(TidyPanel, { onClose: () => setTidy(false) }),
       h("div", { className: "acc-cols" },
         columns.map((c) => h(Column, { key: c.id + sort + style + sub, id: c.id, label: c.label, items: c.id === "all" ? shown : shown.filter((p) => p.group === c.id) })))));
@@ -1469,7 +1683,9 @@ function MyAlbums() {
   const [sort, setSort] = useState("recent");
   const [style, setStyle] = useState("all");
   const plays = usePlays();
+  const [axis, setAxis] = useChipAxis(() => setStyle("all"));
   const { styles, also, progress, names } = useStyles(state.data);
+  const mood = useMoods(state.data, axis === "moods");
   const byRelease = sort.startsWith("release");
   const datesProgress = useAlbumDates(state.data, byRelease);
   const sorted = useMemo(() => {
@@ -1485,11 +1701,13 @@ function MyAlbums() {
     if (sort === "artist") return list.sort((a, b) => a.artist.localeCompare(b.artist, "fr", { sensitivity: "base" }) || byName(a, b));
     return list.sort(byRecent);
   }, [state.data, sort, plays, datesProgress]);
-  const shown = sorted.filter(byStyle(style, styles, also));
+  const shown = sorted.filter(axis === "moods" ? byMood(style, mood.moods) : byStyle(style, styles, also));
   return h(Status, { state }, () =>
     h("section", { className: "acc-section" },
       h(Toolbar, null,
-        h(StyleBar, { items: sorted, styles, also, names, progress, value: style, onChange: setStyle }),
+        h(ChipBar, { axis, setAxis,
+          styleBar: { items: sorted, styles, also, names, progress, value: style, onChange: setStyle },
+          moodBar: { items: sorted, ...mood, value: style, onChange: setStyle } }),
         h(Sorts, { options: ALBUM_SORTS, value: sort, onChange: setSort })),
       datesProgress && h("div", { className: "acc-hint acc-note" }, tr("Lecture des dates de sortie… {done}/{total} (une seule fois)", datesProgress)),
       h(SectionlessGrid, { key: sort + style, items: shown })));
@@ -1517,11 +1735,16 @@ function StyledSections({ sections, limit }) {
   const all = useMemo(() => sections.flatMap((s) => s.items), [sections]);
   const { styles, also, progress, names } = useStyles(all);
   const [style, setStyle] = useState("all");
-  const keep = byStyle(style, styles, also);
+  const [axis, setAxis] = useChipAxis(() => setStyle("all"));
+  const mood = useMoods(all, axis === "moods");
+  const keep = axis === "moods" ? byMood(style, mood.moods) : byStyle(style, styles, also);
   const filtered = sections.map((s) => ({ ...s, items: s.items.filter(keep) })).filter((s) => s.items.length);
   return h(React.Fragment, null,
-    h(Toolbar, null, h(StyleBar, { items: all, styles, also, names, progress, value: style, onChange: setStyle })),
-    filtered.length ? filtered.map((s) => h(Section, { key: s.title + style, title: s.title, items: s.items, limit })) : h("div", { className: "acc-empty" }, tr("Rien dans ce style ici.")));
+    h(Toolbar, null, h(ChipBar, { axis, setAxis,
+      styleBar: { items: all, styles, also, names, progress, value: style, onChange: setStyle },
+      moodBar: { items: all, ...mood, value: style, onChange: setStyle } })),
+    filtered.length ? filtered.map((s) => h(Section, { key: s.title + axis + style, title: s.title, items: s.items, limit }))
+      : h("div", { className: "acc-empty" }, tr(axis === "moods" ? "Rien dans cette ambiance ici." : "Rien dans ce style ici.")));
 }
 
 function LikedHero({ reorder, drag }) {
@@ -1552,13 +1775,31 @@ async function playFolder(folder) {
     const r = await P.PlaylistAPI.getContents(uri, { limit: 300 });
     for (const t of r.items || []) if (t.uri?.startsWith("spotify:track:")) uris.add(t.uri);
   });
+  await playShuffled(folder.uri, [...uris], "dossier vide");
+}
+
+// Lit une liste de titres mélangée, avec contextUri comme contexte de lecture (1000 titres au plus).
+async function playShuffled(contextUri, uris, emptyMsg) {
   const list = [...uris];
-  if (!list.length) throw new Error("dossier vide");
+  if (!list.length) throw new Error(emptyMsg);
   for (let i = list.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [list[i], list[j]] = [list[j], list[i]];
   }
-  await P.PlayerAPI.play({ uri: folder.uri, pages: [{ items: list.slice(0, 1000).map((uri) => ({ uri, type: "track" })) }] }, { featureIdentifier: "accueil" }, {});
+  await Spicetify.Platform.PlayerAPI.play({ uri: contextUri, pages: [{ items: list.slice(0, 1000).map((uri) => ({ uri, type: "track" })) }] }, { featureIdentifier: "accueil" }, {});
+}
+
+// Lance une ambiance : dans les éléments qui l'ont (40 au plus), seulement les titres qui l'ont eux-mêmes.
+async function playMood(mood, cards) {
+  const idx = await getMoodIndex();
+  const sources = cards.filter((c) => /^spotify:(playlist|album|artist):/.test(c.uri)).slice(0, 40);
+  const picked = new Set();
+  await pool(sources, 6, async (c) => {
+    const tracks = await moodTracks(c.uri);
+    const feats = await audioFeatures(tracks);
+    for (const x of feats) if (trackMood(x, idx.t) === mood) picked.add(x.uri);
+  });
+  await playShuffled(sources[0]?.uri, [...picked], tr("aucun titre dans cette ambiance"));
 }
 
 
@@ -2726,6 +2967,11 @@ header[data-testid="topbar"] { display: none !important; }
 .acc-liked-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .acc-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; margin-bottom: 18px; }
 .acc-styles { display: flex; flex-wrap: wrap; gap: 6px; }
+.acc-chipbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.acc-axis { display: inline-flex; flex: none; padding: 2px; border-radius: 999px; background: var(--acc-chip); }
+.acc-axis-opt { border: 0; border-radius: 999px; padding: 4px 10px; background: none; color: var(--acc-sub); font: inherit; font-size: .75rem; font-weight: 700; cursor: pointer; }
+.acc-axis-opt:hover { color: var(--acc-text); }
+.acc-axis-opt.is-on { background: rgba(255,255,255,.16); color: var(--acc-text); }
 .acc-schip { display: inline-flex; align-items: center; border: 0; border-radius: 999px; background: var(--acc-chip); color: var(--acc-text); font-size: .8125rem; padding: 0; cursor: pointer; }
 button.acc-schip { padding: 5px 12px; }
 .acc-schip:hover { background: var(--acc-chip-hover); }
