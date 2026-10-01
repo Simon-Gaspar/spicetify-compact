@@ -29,7 +29,7 @@ const EN = {
   "Saisons automatiques": "Automatic seasons",
   "Crée et épingle la playlist de la nouvelle saison, et range la précédente dans SAISONS (si ce dossier existe).": "Creates and pins the new season's playlist, and files the previous one into SAISONS (if that folder exists).",
   "Avis de mise à jour": "Update notice",
-  "Une fois par jour, regarde si une nouvelle version du thème est sortie (lit seulement version.json sur GitHub).": "Once a day, checks whether a new version of the theme is out (only reads version.json on GitHub).",
+  "Au démarrage de Spotify puis toutes les 6 h, regarde si une nouvelle version du thème est sortie (lit seulement version.json sur GitHub).": "When Spotify starts, then every 6 hours, checks whether a new version of the theme is out (only reads version.json on GitHub).",
   "Noter mes écoutes": "Record my plays",
   "Chaque titre écouté est noté sur cet ordinateur pour la page Stats. Désactivé : plus rien n'est noté, le déjà noté reste.": "Every track you play is recorded on this computer for the Stats page. Off: nothing more is recorded, what's already there stays.",
   "Importer l'historique étendu": "Import extended history",
@@ -343,7 +343,7 @@ const SETTINGS = [
   ] },
   { section: "Automatismes", items: [
     { key: "seasons", label: "Saisons automatiques", desc: "Crée et épingle la playlist de la nouvelle saison, et range la précédente dans SAISONS (si ce dossier existe)." }, // core
-    { key: "updateCheck", label: "Avis de mise à jour", desc: "Une fois par jour, regarde si une nouvelle version du thème est sortie (lit seulement version.json sur GitHub)." }, // core
+    { key: "updateCheck", label: "Avis de mise à jour", desc: "Au démarrage de Spotify puis toutes les 6 h, regarde si une nouvelle version du thème est sortie (lit seulement version.json sur GitHub)." }, // core
   ] },
 ];
 const readSettings = () => ({ ...SETTINGS_DEFAULTS, ...(lsGet(SETTINGS_KEY) || {}) });

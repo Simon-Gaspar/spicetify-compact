@@ -1,7 +1,7 @@
 {
-  "version": "1.4.0",
+  "version": "1.4.1",
   "notes": {
-    "fr": "Stats sur leur propre page, import de l'historique et nouveaux réglages dans Paramètres (langue, panneau de gauche, saisons…).",
-    "en": "Stats on their own page, history import and new options in Settings (language, left sidebar, seasons…)."
+    "fr": "Avis de mise à jour plus réactif : vérifié à chaque démarrage puis toutes les 6 h, au lieu d'une réponse gardée 24 h.",
+    "en": "Faster update notice: checked at every start, then every 6 hours, instead of an answer kept for 24 hours."
   }
 }

@@ -8,7 +8,7 @@
 //    et range la saison précédente dans le dossier SAISONS. Une seule fois par saison.
 // 4. N'active le CSS compact du panneau (thème Compact) que si le patch 64 → 48 px est en place.
 // 6. « Écouter plus tard » et « Discographie complète » dans le menu clic droit.
-// 9. Avis de mise à jour : compare ACCUEIL_VERSION à version.json du dépôt GitHub (une fois par jour).
+// 9. Avis de mise à jour : compare ACCUEIL_VERSION à version.json du dépôt GitHub (au démarrage, puis toutes les 6 h).
 // 8. Épingles de l'accueil : playlists, albums, dossiers, artistes ou émissions affichés en haut
 //    de la page, choisis au clic droit (« Épingler sur l'accueil »).
 // 10. Statistiques d'écoute : chaque titre ou épisode joué est noté (durée réellement écoutée, passé
@@ -16,7 +16,7 @@
 // 5. Vérifie les API internes de Spotify dont dépend le thème et signale celles qui manquent
 //    (elles changent parfois avec les mises à jour de Spotify).
 // Version installée du thème : à incrémenter avec version.json à la racine du dépôt à chaque publication.
-const ACCUEIL_VERSION = "1.4.0";
+const ACCUEIL_VERSION = "1.4.1";
 
 // Langue : français si Spotify est en français, anglais sinon ; accueil:lang ("fr" | "en") force une
 // langue. Calculée à chaque appel (Spicetify.Locale n'est pas toujours prêt au démarrage).
@@ -447,7 +447,10 @@ function accueilSetting(key, fallback) {
 
   // ---------- 9. avis de mise à jour ----------
   // Ne lit que version.json (rien n'est téléchargé ni exécuté) ; l'accueil affiche un bandeau si la
-  // version publiée est plus récente. Résultat gardé un jour (accueil:update).
+  // version publiée est plus récente. Lu au démarrage puis toutes les 6 h tant que Spotify reste
+  // ouvert ; la dernière réponse (accueil:update) ne sert que de secours : affichée dès le démarrage,
+  // en attendant GitHub, et gardée s'il ne répond pas. (Avant 1.4.1, gardée 24 h sans relire : une
+  // version publiée entre-temps restait invisible jusqu'au lendemain.)
   const VERSION_URL = "https://raw.githubusercontent.com/Simon-Gaspar/spicetify-compact/main/version.json";
   const newer = (a, b) => {
     const pa = String(a).split(".").map(Number), pb = String(b).split(".").map(Number);
@@ -458,11 +461,10 @@ function accueilSetting(key, fallback) {
     window.AccueilCore.update = { current: ACCUEIL_VERSION, latest, available: !!latest?.version && newer(latest.version, ACCUEIL_VERSION) };
     window.dispatchEvent(new Event("accueil:update"));
   };
-  (async () => {
-    if (!accueilSetting("updateCheck", true)) return; // réglage « Avis de mise à jour » : rien n'est lu
-    let cached = null;
-    try { cached = JSON.parse(Spicetify.LocalStorage.get("accueil:update") || "null"); } catch {}
-    if (cached && Date.now() - cached.at < 86400000) return publishUpdate(cached.latest);
+  const UPDATE_EVERY = 6 * 3600 * 1000;
+  // Réglage « Avis de mise à jour » désactivé : rien n'est lu (relu à chaque passage).
+  const checkUpdate = async () => {
+    if (!accueilSetting("updateCheck", true)) return;
     try {
       const r = await fetch(VERSION_URL, { cache: "no-store" });
       if (!r.ok) return;
@@ -470,7 +472,14 @@ function accueilSetting(key, fallback) {
       Spicetify.LocalStorage.set("accueil:update", JSON.stringify({ at: Date.now(), latest }));
       publishUpdate(latest);
     } catch (e) { warn("mise à jour")(e); }
-  })();
+  };
+  if (accueilSetting("updateCheck", true)) {
+    let cached = null;
+    try { cached = JSON.parse(Spicetify.LocalStorage.get("accueil:update") || "null"); } catch {}
+    if (cached?.latest) publishUpdate(cached.latest);
+  }
+  checkUpdate();
+  setInterval(checkUpdate, UPDATE_EVERY);
 
   // ---------- 10. statistiques d'écoute ----------
   // Une écoute = un passage sur un titre ou un épisode, avec le temps réellement écouté (pauses

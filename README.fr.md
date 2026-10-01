@@ -83,7 +83,7 @@ Le script installe Spicetify s'il manque, copie le thème, les deux pages et les
 
 Revenir au Spotify d'origine : `spicetify restore`.
 
-**Avis de mise à jour** : une fois par jour, le thème lit `version.json` sur ce dépôt (rien d'autre n'est téléchargé ni exécuté). Quand une version plus récente est publiée, un bandeau le signale en haut de l'accueil ; « Plus tard » le masque pour cette version.
+**Avis de mise à jour** : au démarrage de Spotify, puis toutes les 6 h tant qu'il reste ouvert, le thème lit `version.json` sur ce dépôt (rien d'autre n'est téléchargé ni exécuté). Quand une version plus récente est publiée, un bandeau le signale en haut de l'accueil ; « Plus tard » le masque pour cette version.
 
 **Publier une nouvelle version** (mainteneur) : passer `ACCUEIL_VERSION` en tête de `spicetify/Extensions/accueil-core.js` et `version` dans `version.json` au même numéro, avec éventuellement une courte note dans `version.json` (`notes.fr` / `notes.en`), puis pousser.
 
