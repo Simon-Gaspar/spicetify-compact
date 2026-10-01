@@ -52,15 +52,16 @@ body.acc-compact-rows #Desktop_LeftSidebar_Id [role="row"] [class*="list-row__he
 
 /* Panneau de gauche retiré : la navigation passe par la page Accueil (custom app).
    acc-app n'est posée par accueil-core.js que si cette custom app est installée.
-   La colonne « left-sidebar » de la grille principale se cale sur son contenu et tombe à 0. */
-body.acc-app #Desktop_LeftSidebar_Id {
+   La colonne « left-sidebar » de la grille principale se cale sur son contenu et tombe à 0.
+   Réglage « Panneau de gauche » de l'accueil : classe acc-show-sidebar, le panneau reste. */
+body.acc-app:not(.acc-show-sidebar) #Desktop_LeftSidebar_Id {
   display: none !important;
 }
 
 /* Sans panneau de gauche, les flèches ← → chevauchent les boutons de fenêtre macOS.
    On les décale de 26 pt, soit une flèche à ~84 pt du bord, quel que soit le zoom
    (--zoom-level, en %, posé sur .Root). Mac uniquement : classe posée par accueil-core.js. */
-body.acc-mac .main-globalNav-historyButtonsWrapper {
+body.acc-mac:not(.acc-show-sidebar) .main-globalNav-historyButtonsWrapper {
   margin-left: 0 !important;
   padding-left: calc(2600px / var(--zoom-level, 100)) !important;
 }

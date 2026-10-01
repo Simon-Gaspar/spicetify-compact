@@ -16,7 +16,7 @@
 // 5. Vérifie les API internes de Spotify dont dépend le thème et signale celles qui manquent
 //    (elles changent parfois avec les mises à jour de Spotify).
 // Version installée du thème : à incrémenter avec version.json à la racine du dépôt à chaque publication.
-const ACCUEIL_VERSION = "1.3.0";
+const ACCUEIL_VERSION = "1.4.0";
 
 // Langue : français si Spotify est en français, anglais sinon ; accueil:lang ("fr" | "en") force une
 // langue. Calculée à chaque appel (Spicetify.Locale n'est pas toujours prêt au démarrage).
@@ -56,6 +56,11 @@ function accueilT(fr, vars) {
   return text;
 }
 
+// Réglages du panneau Paramètres de l'accueil (accueil:settings), lus à chaque usage.
+function accueilSetting(key, fallback) {
+  try { const s = JSON.parse(Spicetify.LocalStorage.get("accueil:settings") || "{}"); return key in s ? s[key] : fallback; } catch { return fallback; }
+}
+
 (function accueilCore(tries = 0) {
   const missingOf = (list) => list.filter(([, get]) => { try { return !get(); } catch { return true; } }).map(([name]) => accueilT(name));
   const BASE = [
@@ -86,6 +91,10 @@ function accueilT(fr, vars) {
     .then((r) => {
       if (!r.ok) return;
       document.body.classList.add("acc-app");
+      // Panneau de gauche : masqué par le thème, sauf si le réglage « showSidebar » le rétablit.
+      const syncSidebar = () => document.body.classList.toggle("acc-show-sidebar", !!accueilSetting("showSidebar", false));
+      syncSidebar();
+      window.addEventListener("accueil:settings", syncSidebar);
       // Réglages propres au Mac dans le thème (boutons de fenêtre à gauche).
       if (/Mac/i.test(navigator.platform || navigator.userAgent)) document.body.classList.add("acc-mac");
       const redirect = (arg) => {
@@ -172,7 +181,7 @@ function accueilT(fr, vars) {
 
   async function seasonCheck() {
     const name = currentSeason();
-    if (Spicetify.LocalStorage.get(SEASON_DONE) === name) return;
+    if (!accueilSetting("seasons", true) || Spicetify.LocalStorage.get(SEASON_DONE) === name) return;
     const R = Spicetify.Platform.RootlistAPI;
     const L = Spicetify.Platform.LibraryAPI;
     const findRoot = async () => (await R.getContents({})).items;
@@ -450,6 +459,7 @@ function accueilT(fr, vars) {
     window.dispatchEvent(new Event("accueil:update"));
   };
   (async () => {
+    if (!accueilSetting("updateCheck", true)) return; // réglage « Avis de mise à jour » : rien n'est lu
     let cached = null;
     try { cached = JSON.parse(Spicetify.LocalStorage.get("accueil:update") || "null"); } catch {}
     if (cached && Date.now() - cached.at < 86400000) return publishUpdate(cached.latest);
@@ -529,12 +539,12 @@ function accueilT(fr, vars) {
     return { k: `${c.u}@${Math.floor(end / 1000)}`, t: end, ms: Math.round(capped), d: c.d, u: c.u, n: c.n, a: c.a, an: c.an, al: c.al, aln: c.aln, img: c.img, c: c.c, cn: c.cn, ty: c.ty,
       s: capped < SKIP_MS && (!c.d || c.d > SKIP_MS + 3000), src: "live" };
   };
+  // Réglage « Noter mes écoutes » : désactivé, plus rien n'est noté (le déjà noté reste).
+  const logPlay = (c, ms, end) => { if (ms >= 1500 && accueilSetting("recordPlays", true)) statsAdd([recordOf(c, ms, end)]).catch(warn("stats")); };
   const commit = () => {
     const c = cur;
     cur = null;
-    if (!c) return;
-    const ms = played(c);
-    if (ms >= 1500) statsAdd([recordOf(c, ms, Date.now())]).catch(warn("stats"));
+    if (c) logPlay(c, played(c), Date.now());
   };
   // Morceau en cours lors de la dernière fermeture : repris s'il joue encore au redémarrage (moins de
   // 10 min après), sinon noté tel quel.
@@ -546,7 +556,7 @@ function accueilT(fr, vars) {
     let acc = 0;
     if (pending && m) {
       if (m.u === pending.u && Date.now() - pending.at < 600000) acc = pending.ms;
-      else if (pending.u && pending.ms >= 1500) statsAdd([recordOf(pending, pending.ms, pending.at)]).catch(warn("stats"));
+      else if (pending.u) logPlay(pending, pending.ms, pending.at);
       pending = null;
     }
     cur = m ? { ...m, acc, since: Spicetify.Player.isPlaying() ? Date.now() : null } : null;

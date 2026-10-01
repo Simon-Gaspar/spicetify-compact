@@ -22,13 +22,20 @@ Pour **Spotify sur ordinateur, version téléchargée sur spotify.com** (pas cel
 - **3 emplacements en haut : Titres likés + 2 playlists au choix** : des emplacements vides en pointillé montrent où elles vont. Clic droit sur une playlist, un album, un artiste, une émission ou un dossier → « Épingler sur l'accueil » (3 emplacements, Titres likés compris, toujours sur une ligne). Glisse une carte, Titres likés compris, pour changer l'ordre. Les titres likés sont toujours là, avec lecture ou aléatoire.
 
 ### Stats
-Un onglet *Stats* à côté de Musique et Podcasts, par période (aujourd'hui, 7 jours, 30 jours, cette année, depuis toujours) :
+Une page *Stats* (bouton **Stats** au bout de la ligne des sous-onglets, à côté de **Paramètres**), par période (aujourd'hui, 7 jours, 30 jours, cette année, depuis toujours) :
 - **temps d'écoute**, écoutes, artistes, titres différents, moyenne par jour, et l'évolution par rapport à la période d'avant ;
 - **estimation reversée aux artistes** (~0,004 $ par écoute de plus de 30 s), **série** de jours d'affilée et record, **nouveaux artistes** et titres découverts, **taux de titres passés** ;
 - graphique d'**activité**, **top titres, artistes et albums** (écoutes et durée), **d'où tu écoutes** (playlists, albums, radios), **styles** (d'après tes dossiers de style), **habitudes** (heure de pointe, plus longue séance, par heure et par jour), **en boucle** et **les plus passés** ;
 - **Selon Spotify** : le top artistes et titres que Spotify calcule pour toi sur 4 semaines, 6 mois ou un an (l'ordre seulement), disponible dès l'installation.
 
-Chaque titre écouté est noté en local dès l'installation du thème (IndexedDB, sur cet ordinateur seulement). Pour remonter plus loin, demande ton **historique de streaming étendu** à Spotify (Compte → Confidentialité) et importe les fichiers `Streaming_History_Audio_*.json` avec « Importer… » : seuls les titres, artistes, albums, dates et durées sont gardés (ni adresse IP, ni pays, ni appareil). « Retirer l'import » les enlève.
+Chaque titre écouté est noté en local dès l'installation du thème (IndexedDB, sur cet ordinateur seulement). Pour remonter plus loin, demande ton **historique de streaming étendu** à Spotify (Compte → Confidentialité) et importe les fichiers `Streaming_History_Audio_*.json` avec « Importer… » dans **Paramètres** : seuls les titres, artistes, albums, dates et durées sont gardés (ni adresse IP, ni pays, ni appareil). « Retirer l'import » les enlève.
+
+### Paramètres
+Le bouton **Paramètres** au bout de la ligne des sous-onglets :
+- **Affichage** : séparer les playlists par propriétaire, nombre d'écoutes sur les cartes, panneau de gauche (masqué par défaut).
+- **Automatismes** : saisons automatiques, avis de mise à jour (désactivé, rien n'est lu sur GitHub).
+- **Stats d'écoute** : noter mes écoutes, importer l'historique étendu, effacer les stats.
+- **Langue** : comme Spotify, français ou anglais.
 
 ### Lecture plein écran
 Le bouton plein écran de la barre du lecteur (ou ⤢ du panneau En cours de lecture) ouvre une vue plein écran : pochette en grand, contrôles, **paroles synchronisées** (clic sur une ligne pour s'y rendre) et liste **À suivre** (clic sur un titre pour y sauter). Échap pour fermer.
@@ -87,7 +94,7 @@ Revenir au Spotify d'origine : `spicetify restore`.
 
 ## Langue
 
-Français si Spotify est en français, anglais sinon. Pour forcer une langue, ouvre la console (`spicetify enable-devtools`, puis clic droit → Inspecter) et lance `localStorage.setItem("accueil:lang", "fr")` (ou `"en"`), puis recharge avec Ctrl/Cmd+R. Les noms de styles viennent de tes dossiers et ne sont pas traduits.
+Français si Spotify est en français, anglais sinon. Pour forcer une langue : **Paramètres → Langue** sur l'accueil. Les noms de styles viennent de tes dossiers et ne sont pas traduits.
 
 ## Gardé sur cet ordinateur
 

@@ -18,6 +18,33 @@ const LANG = (() => {
 })();
 const LOCALE = LANG === "fr" ? "fr-FR" : "en-US";
 const EN = {
+  "Affichage": "Display",
+  "Automatismes": "Automations",
+  "Stats d'écoute": "Listening stats",
+  "Langue": "Language",
+  "Nombre d'écoutes sur les cartes": "Play counts on cards",
+  "Le compteur sur les pochettes de playlists et d'albums, et dans leur sous-titre.": "The counter on playlist and album covers, and in their subtitle.",
+  "Panneau de gauche": "Left sidebar",
+  "La bibliothèque de Spotify à gauche. Désactivé : tu navigues depuis l'accueil.": "Spotify's library on the left. Off: you navigate from the home page.",
+  "Saisons automatiques": "Automatic seasons",
+  "Crée et épingle la playlist de la nouvelle saison, et range la précédente dans SAISONS (si ce dossier existe).": "Creates and pins the new season's playlist, and files the previous one into SAISONS (if that folder exists).",
+  "Avis de mise à jour": "Update notice",
+  "Une fois par jour, regarde si une nouvelle version du thème est sortie (lit seulement version.json sur GitHub).": "Once a day, checks whether a new version of the theme is out (only reads version.json on GitHub).",
+  "Noter mes écoutes": "Record my plays",
+  "Chaque titre écouté est noté sur cet ordinateur pour la page Stats. Désactivé : plus rien n'est noté, le déjà noté reste.": "Every track you play is recorded on this computer for the Stats page. Off: nothing more is recorded, what's already there stays.",
+  "Importer l'historique étendu": "Import extended history",
+  "Demande-le à Spotify (Compte → Confidentialité → « Historique de streaming étendu »), puis importe les fichiers Streaming_History_Audio_*.json reçus. Seuls titres, artistes, albums, dates et durées sont gardés.": "Request it from Spotify (Account → Privacy → \"Extended streaming history\"), then import the Streaming_History_Audio_*.json files you receive. Only titles, artists, albums, dates and durations are kept.",
+  "Effacer les stats": "Clear stats",
+  "Toutes les écoutes notées ici et importées, sur cet ordinateur.": "Every play recorded here and imported, on this computer.",
+  "Effacer les {n} écoutes de tes stats ? C'est définitif.": "Delete the {n} plays from your stats? This can't be undone.",
+  "Stats effacées": "Stats cleared",
+  "Effacer": "Clear",
+  "Comme Spotify": "Same as Spotify",
+  "De l'accueil, des stats et des menus du thème. L'interface se recharge.": "For the home page, stats and the theme's menus. The interface reloads.",
+  "Écoutes notées sur cet ordinateur depuis le {date}.": "Plays recorded on this computer since {date}.",
+  "{n} écoutes importées de ton historique Spotify.": "{n} plays imported from your Spotify history.",
+  "Pour remonter plus loin, importe ton historique Spotify depuis Paramètres.": "To go further back, import your Spotify history from Settings.",
+  "← Accueil": "← Home",
   "{d} % par rapport à hier": "{d}% vs yesterday",
   "{d} % par rapport aux 7 jours d'avant": "{d}% vs the previous 7 days",
   "{d} % par rapport aux 30 jours d'avant": "{d}% vs the previous 30 days",
@@ -47,7 +74,6 @@ const EN = {
   "En boucle": "On repeat",
   "Habitudes": "Habits",
   "Heure de pointe": "Peak hour",
-  "Historique": "History",
   "Import impossible : ": "Import failed: ",
   "Import retiré.": "Import removed.",
   "Importer…": "Import…",
@@ -59,7 +85,6 @@ const EN = {
   "Playlists, albums et radios d'où viennent tes écoutes (notées ici seulement).": "Playlists, albums and radios your plays come from (recorded here only).",
   "Plus longue séance": "Longest session",
   "Podcasts": "Podcasts",
-  "Pour remonter plus loin, demande ton historique à Spotify (Compte → Confidentialité → « Historique de streaming étendu ») et importe les fichiers JSON reçus.": "To go further back, request your history from Spotify (Account → Privacy → \"Extended streaming history\") and import the JSON files you receive.",
   "Radio": "Radio",
   "Recherche": "Search",
   "Retirer l'import": "Remove import",
@@ -93,7 +118,6 @@ const EN = {
   "{n} titres découverts": "{n} tracks discovered",
   "{n} écoutes importées, du {from} au {to}.": "{n} plays imported, from {from} to {to}.",
   "{n} écoutes importées.": "{n} plays imported.",
-  "Écoutes notées sur cet ordinateur depuis le {date} (y compris celles lancées ailleurs pendant que Spotify est ouvert ici).": "Plays recorded on this computer since {date} (including those started elsewhere while Spotify is open here).",
   "écoutes": "plays",
   "Musique": "Music",
   "Podcasts & livres": "Podcasts & books",
@@ -307,11 +331,20 @@ function lsSet(key, value) {
 
 // ---------- paramètres ----------
 // Réglages de l'accueil (panneau Paramètres), gardés dans accueil:settings. Pour en ajouter un :
-// une valeur par défaut dans SETTINGS_DEFAULTS et une ligne dans SETTINGS.
+// une valeur par défaut dans SETTINGS_DEFAULTS et une ligne dans SETTINGS. Ceux marqués « core »
+// sont lus par l'extension accueil-core.js (accueilSetting), avec les mêmes valeurs par défaut.
 const SETTINGS_KEY = "accueil:settings";
-const SETTINGS_DEFAULTS = { splitPlaylists: true };
+const SETTINGS_DEFAULTS = { splitPlaylists: true, showPlays: true, showSidebar: false, seasons: true, updateCheck: true, recordPlays: true };
 const SETTINGS = [
-  { key: "splitPlaylists", label: "Séparer les playlists par propriétaire", desc: "Mes playlists en trois colonnes : les tiennes, celles des autres, celles de Spotify. Désactivé : une seule grille." },
+  { section: "Affichage", items: [
+    { key: "splitPlaylists", label: "Séparer les playlists par propriétaire", desc: "Mes playlists en trois colonnes : les tiennes, celles des autres, celles de Spotify. Désactivé : une seule grille." },
+    { key: "showPlays", label: "Nombre d'écoutes sur les cartes", desc: "Le compteur sur les pochettes de playlists et d'albums, et dans leur sous-titre." },
+    { key: "showSidebar", label: "Panneau de gauche", desc: "La bibliothèque de Spotify à gauche. Désactivé : tu navigues depuis l'accueil." }, // core
+  ] },
+  { section: "Automatismes", items: [
+    { key: "seasons", label: "Saisons automatiques", desc: "Crée et épingle la playlist de la nouvelle saison, et range la précédente dans SAISONS (si ce dossier existe)." }, // core
+    { key: "updateCheck", label: "Avis de mise à jour", desc: "Une fois par jour, regarde si une nouvelle version du thème est sortie (lit seulement version.json sur GitHub)." }, // core
+  ] },
 ];
 const readSettings = () => ({ ...SETTINGS_DEFAULTS, ...(lsGet(SETTINGS_KEY) || {}) });
 // [réglages, set(patch)] ; tous les composants qui l'utilisent suivent le changement.
@@ -893,7 +926,7 @@ function usePlays() {
   return plays;
 }
 
-const playsLabel = (n) => (n ? tr(n > 1 ? " · {n} écoutes" : " · {n} écoute", { n }) : "");
+const playsLabel = (n) => (n && readSettings().showPlays ? tr(n > 1 ? " · {n} écoutes" : " · {n} écoute", { n }) : "");
 const withPlays = (items, plays) => items.map((c) => ({ ...c, n: plays[c.uri]?.n || 0, sub: c.baseSub + playsLabel(plays[c.uri]?.n) }));
 
 function useStyles(items) {
@@ -1021,7 +1054,7 @@ function Tile({ card, showOwner }) {
   return withMenu(card.uri, h("div", { className: "acc-tile" + (over ? " is-drop" : ""), onClick: () => openUri(card.uri), title: tip, ...(card.group === "self" ? drop : {}) },
     h("div", { className: "acc-tile-img" },
       card.img ? h("img", { src: card.img, loading: "lazy", alt: "", draggable: false }) : null,
-      card.n > 0 && h("span", { className: "acc-tile-n" }, card.n),
+      card.n > 0 && readSettings().showPlays && h("span", { className: "acc-tile-n" }, card.n),
       h("button", { className: "acc-tile-play", "aria-label": tr("Lire ") + card.name, onClick: (e) => { e.stopPropagation(); play(card.uri); } }, h(PlayIcon))),
     h("div", { className: "acc-tile-name" }, card.name)));
 }
@@ -1595,12 +1628,15 @@ function Later() {
 const RELEASE_TYPES = { ALBUM: tr("Albums"), EP: "EP", SINGLE: tr("Singles"), COMPILATION: tr("Compilations") };
 const RELEASE_ONE = { ALBUM: "Album", EP: "EP", SINGLE: "Single", COMPILATION: tr("Compilation") };
 
+// Définition GraphQL chargée par Spotify seulement après sa propre page discographie : on garde
+// son identifiant pour s'en passer (comme TOP_QUERY).
+const DISCO_QUERY = { name: "queryArtistDiscographyAll", operation: "query", sha256Hash: "5e07d323febb57b4a56a42abbf781490e58764aa45feb6e3dc0591564fc56599", value: null };
 async function fetchDiscography(id) {
   const G = Spicetify.GraphQL;
   const uri = `spotify:artist:${id}`;
   const releases = [];
   for (let offset = 0; ; offset += 50) {
-    const r = await G.Request(G.Definitions.queryArtistDiscographyAll, { uri, offset, limit: 50, order: "DATE_DESC" });
+    const r = await G.Request(G.Definitions.queryArtistDiscographyAll || DISCO_QUERY, { uri, offset, limit: 50, order: "DATE_DESC" });
     const all = r?.data?.artistUnion?.discography?.all;
     if (!all) throw new Error(tr("discographie introuvable"));
     for (const it of all.items || []) {
@@ -2166,10 +2202,10 @@ function StatsView({ period }) {
       h("h2", null, tr("Tes stats démarrent maintenant")),
       h("p", { className: "acc-sub" }, tr("Chaque titre écouté est noté à partir d'aujourd'hui, sur cet ordinateur. Reviens après quelques morceaux, ou importe ton historique Spotify pour remonter plus loin."))),
     h(SpotifyTops),
-    h(StatsImport, { records }));
+    h(StatsHint, { records }));
 
   const delta = s.prevMs ? Math.round(((s.ms - s.prevMs) / s.prevMs) * 100) : null;
-  const deltaText = delta != null && tr({ today: "{d} % par rapport à hier", week: "{d} % par rapport aux 7 jours d'avant", month: "{d} % par rapport aux 30 jours d'avant" }[period], { d: (delta > 0 ? "+" : "") + delta });
+  const deltaText = delta != null && tr({ today: "{d} % par rapport à hier", week: "{d} % par rapport aux 7 jours d'avant", month: "{d} % par rapport aux 30 jours d'avant" }[period], { d: (delta > 0 ? "+" : delta < 0 ? "−" : "") + Math.abs(delta) });
   const hourBuckets = s.hours.map((ms, i) => ({ ms, label: `${i} h` }));
   const dayBuckets = s.weekdays.map((ms, i) => ({ ms, label: WEEKDAYS()[i] }));
   const styleTotal = s.styles?.total || 0;
@@ -2233,7 +2269,16 @@ function StatsView({ period }) {
       s.skipped.length > 0 && h(TopList, { title: tr("Les plus passés"), icon: NoteIcon, kind: "track", items: s.skipped,
         count: (e) => tr("passé {n} fois", { n: e.plays }) })),
 
-    h(StatsImport, { records, first: s.first }));
+    h(StatsHint, { records }));
+}
+
+// Rappel en bas de page : d'où viennent les chiffres ; l'import est dans Paramètres.
+function StatsHint({ records }) {
+  let since = Infinity, imported = 0;
+  for (const r of records) { if (r.src === "live" && r.t < since) since = r.t; if (r.src === "import") imported++; }
+  return h("div", { className: "acc-hint acc-shint" },
+    since < Infinity ? tr("Écoutes notées sur cet ordinateur depuis le {date}.", { date: fmtDay(since, { day: "numeric", month: "long", year: "numeric" }) }) : tr("Les écoutes sont notées sur cet ordinateur à partir de maintenant."),
+    " ", imported ? tr("{n} écoutes importées de ton historique Spotify.", { n: fmtNum(imported) }) : tr("Pour remonter plus loin, importe ton historique Spotify depuis Paramètres."));
 }
 
 // Classements de Spotify (opération GraphQL userTopContent de la page profil) : top artistes et titres
@@ -2330,8 +2375,10 @@ function parseHistory(entries, live) {
   return out;
 }
 
-function StatsImport({ records, first }) {
+function StatsImport() {
+  const { records } = useStatsRecords();
   const [state, setState] = useState(null);
+  if (!records) return h("div", { className: "acc-sub" }, tr("Chargement…"));
   const imported = records.filter((r) => r.src === "import");
   const onFiles = async (files) => {
     if (!files.length) return;
@@ -2353,17 +2400,13 @@ function StatsImport({ records, first }) {
       setState({ msg: tr("{n} écoutes importées, du {from} au {to}.", { n: fmtNum(count), from: fmtDay(lo, { day: "numeric", month: "short", year: "numeric" }), to: fmtDay(hi, { day: "numeric", month: "short", year: "numeric" }) }) });
     } catch (e) { setState({ msg: tr("Import impossible : ") + errMsg(e) }); }
   };
-  const live = records.find((r) => r.src === "live");
-  let since = Infinity;
-  for (const r of records) if (r.src === "live" && r.t < since) since = r.t;
-  return h("div", { className: "acc-scard acc-simport" },
-    h("div", { className: "acc-simport-text" },
-      h("h3", { className: "acc-stop-head" }, tr("Historique")),
-      h("p", { className: "acc-sub" },
-        live ? tr("Écoutes notées sur cet ordinateur depuis le {date} (y compris celles lancées ailleurs pendant que Spotify est ouvert ici).", { date: fmtDay(since, { day: "numeric", month: "long", year: "numeric" }) }) : tr("Les écoutes sont notées sur cet ordinateur à partir de maintenant."),
-        " ", tr("Pour remonter plus loin, demande ton historique à Spotify (Compte → Confidentialité → « Historique de streaming étendu ») et importe les fichiers JSON reçus."),
+  return h("div", { className: "acc-setting acc-simport" },
+    h("div", { className: "acc-setting-text" },
+      h("div", { className: "acc-setting-label" }, tr("Importer l'historique étendu")),
+      h("div", { className: "acc-sub" },
+        tr("Demande-le à Spotify (Compte → Confidentialité → « Historique de streaming étendu »), puis importe les fichiers Streaming_History_Audio_*.json reçus. Seuls titres, artistes, albums, dates et durées sont gardés."),
         imported.length > 0 && " " + tr("{n} écoutes importées.", { n: fmtNum(imported.length) })),
-      state?.msg && h("p", { className: "acc-simport-msg" }, state.msg)),
+      state?.msg && h("div", { className: "acc-simport-msg" }, state.msg)),
     h("div", { className: "acc-simport-actions" },
       h("label", { className: "acc-chip is-small" + (state?.busy ? " is-busy" : "") }, tr("Importer…"),
         h("input", { type: "file", accept: ".json,application/json", multiple: true, hidden: true, disabled: !!state?.busy, onChange: (e) => { onFiles([...e.target.files]); e.target.value = ""; } })),
@@ -2374,10 +2417,22 @@ function StatsImport({ records, first }) {
       } }, tr("Retirer l'import"))));
 }
 
+function StatsClear() {
+  const { records } = useStatsRecords();
+  return h("div", { className: "acc-setting" },
+    h("div", { className: "acc-setting-text" },
+      h("div", { className: "acc-setting-label" }, tr("Effacer les stats")),
+      h("div", { className: "acc-sub" }, tr("Toutes les écoutes notées ici et importées, sur cet ordinateur."))),
+    h("button", { className: "acc-sort", disabled: !records?.length, onClick: async () => {
+      if (!window.confirm(tr("Effacer les {n} écoutes de tes stats ? C'est définitif.", { n: fmtNum(records.length) }))) return;
+      await window.AccueilCore.statsRemove(records.map((r) => r.k));
+      notify(tr("Stats effacées"));
+    } }, tr("Effacer")));
+}
+
 const MAIN_TABS = [
   { id: "music", label: tr("Musique"), tabs: MUSIC_TABS, facet: "music-chip" },
   { id: "podcasts", label: tr("Podcasts & livres"), tabs: PODCAST_TABS, facet: "podcasts-chip" },
-  { id: "stats", label: tr("Stats"), tabs: STATS_PERIODS },
 ];
 
 function Switch({ on, label, onChange }) {
@@ -2385,19 +2440,51 @@ function Switch({ on, label, onChange }) {
     h("span", { className: "acc-switch-knob" }));
 }
 
+// Langue : accueil:lang, lue au chargement de la page (LANG) ; la changer recharge l'interface.
+const LANG_CHOICES = [{ id: "auto", label: tr("Comme Spotify") }, { id: "fr", label: "Français" }, { id: "en", label: "English" }];
+function LanguageSetting() {
+  let forced = null;
+  try { forced = Spicetify.LocalStorage.get("accueil:lang"); } catch {}
+  const value = forced === "fr" || forced === "en" ? forced : "auto";
+  const choose = (id) => {
+    if (id === value) return;
+    Spicetify.LocalStorage.set("accueil:lang", id === "auto" ? "" : id);
+    setTimeout(() => location.reload(), 150);
+  };
+  return h("div", { className: "acc-setting" },
+    h("div", { className: "acc-setting-text" },
+      h("div", { className: "acc-setting-label" }, tr("Langue")),
+      h("div", { className: "acc-sub" }, tr("De l'accueil, des stats et des menus du thème. L'interface se recharge."))),
+    h(Sorts, { options: LANG_CHOICES, value, onChange: choose }));
+}
+
+function SettingRow({ o, settings, set }) {
+  return h("div", { className: "acc-setting" },
+    h("div", { className: "acc-setting-text" },
+      h("div", { className: "acc-setting-label" }, tr(o.label)),
+      h("div", { className: "acc-sub" }, tr(o.desc))),
+    h(Switch, { on: !!settings[o.key], label: tr(o.label), onChange: (v) => set({ [o.key]: v }) }));
+}
+
 function SettingsPanel({ onClose }) {
   const [settings, set] = useSettings();
+  const group = (title, children) => h("div", { key: title, className: "acc-settings-group" }, h("h3", null, tr(title)), children);
   return h("div", { className: "acc-tidy acc-settings" },
     h("div", { className: "acc-tidy-head" },
       h("h2", null, tr("Paramètres")),
       h("button", { className: "acc-sort", onClick: onClose }, tr("Fermer"))),
-    SETTINGS.map((o) => h("div", { key: o.key, className: "acc-setting" },
-      h("div", { className: "acc-setting-text" },
-        h("div", { className: "acc-setting-label" }, tr(o.label)),
-        h("div", { className: "acc-sub" }, tr(o.desc))),
-      h(Switch, { on: !!settings[o.key], label: tr(o.label), onChange: (v) => set({ [o.key]: v }) }))));
+    SETTINGS.map(({ section, items }) => group(section, items.map((o) => h(SettingRow, { key: o.key, o, settings, set })))),
+    group("Stats d'écoute", [
+      h(SettingRow, { key: "recordPlays", o: { key: "recordPlays", label: "Noter mes écoutes", desc: "Chaque titre écouté est noté sur cet ordinateur pour la page Stats. Désactivé : plus rien n'est noté, le déjà noté reste." }, settings, set }),
+      h(StatsImport, { key: "import" }),
+      h(StatsClear, { key: "clear" }),
+    ]),
+    group("Langue", h(LanguageSetting)));
 }
 
+const ChartIcon = () =>
+  h("svg", { viewBox: "0 0 24 24", width: 16, height: 16, fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" },
+    h("path", { d: "M5 20V11M12 20V4M19 20v-6" }));
 const SettingsIcon = () =>
   h("svg", { viewBox: "0 0 24 24", width: 16, height: 16, fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" },
     h("path", { d: "M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1" }),
@@ -2406,7 +2493,8 @@ const SettingsIcon = () =>
 function AccueilApp() {
   const [main, setMain] = useState("music");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [sub, setSub] = useState({ music: "playlists", podcasts: "episodes", stats: "week" });
+  const [sub, setSub] = useState({ music: "playlists", podcasts: "episodes" });
+  const [period, setPeriod] = useState("week");
   const mainTab = MAIN_TABS.find((m) => m.id === main);
   const tabs = mainTab.tabs;
   const tab = tabs.find((t) => t.id === sub[main]);
@@ -2422,12 +2510,24 @@ function AccueilApp() {
       h(Discography, { key: disco[1], id: disco[1] }));
   }
 
+  // Page Stats (/accueil/stats), ouverte par le bouton à côté de Paramètres.
+  if (path.startsWith("/accueil/stats")) {
+    return h("div", { className: "acc-page" },
+      h("style", null, CSS),
+      h("button", { className: "acc-link acc-back", onClick: () => Spicetify.Platform.History.push("/accueil") }, tr("← Accueil")),
+      h("header", { className: "acc-header" }, h("h1", { className: "acc-page-title" }, tr("Stats"))),
+      h("nav", { className: "acc-subnav" },
+        STATS_PERIODS.map((t) => h("button", { key: t.id, className: "acc-chip" + (t.id === period ? " is-on" : ""), onClick: () => setPeriod(t.id) }, t.label)),
+        h("button", { className: "acc-sort acc-settings-btn" + (settingsOpen ? " is-on" : ""), onClick: () => setSettingsOpen(!settingsOpen) }, h(SettingsIcon), tr("Paramètres"))),
+      settingsOpen && h(SettingsPanel, { onClose: () => setSettingsOpen(false) }),
+      h(StatsView, { period }));
+  }
+
   let body;
   if (main === "music" && tab.id === "playlists") body = h(MyPlaylists);
   else if (main === "music" && tab.id === "later") body = h(Later);
   else if (main === "music" && tab.id === "albums") body = h(MyAlbums);
   else if (main === "podcasts" && tab.id === "books") body = h(Audiobooks);
-  else if (main === "stats") body = h(StatsView, { period: tab.id });
   else body = h(HomeSections, { key: main + tab.id, facet: mainTab.facet, tab, tabs });
 
   return h("div", { className: "acc-page" },
@@ -2438,11 +2538,12 @@ function AccueilApp() {
       h("nav", { className: "acc-main-tabs" },
         MAIN_TABS.map((m) =>
           h("button", { key: m.id, className: "acc-main-tab" + (main === m.id ? " is-on" : ""), onClick: () => setMain(m.id) }, m.label))),
-      main !== "stats" && h(PinnedHeroes, { main })),
+      h(PinnedHeroes, { main })),
     h("nav", { className: "acc-subnav" },
       tabs.map((t) => h("button", { key: t.id, className: "acc-chip" + (t.id === tab.id ? " is-on" : ""), onClick: () => setSub({ ...sub, [main]: t.id }) },
         t.label, t.id === "later" && later.length > 0 && h("span", { className: "acc-chip-n" }, later.length))),
-      h("button", { className: "acc-sort acc-settings-btn" + (settingsOpen ? " is-on" : ""), onClick: () => setSettingsOpen(!settingsOpen) }, h(SettingsIcon), tr("Paramètres"))),
+      h("button", { className: "acc-sort acc-settings-btn", onClick: () => Spicetify.Platform.History.push("/accueil/stats") }, h(ChartIcon), tr("Stats")),
+      h("button", { className: "acc-sort acc-tools-btn" + (settingsOpen ? " is-on" : ""), onClick: () => setSettingsOpen(!settingsOpen) }, h(SettingsIcon), tr("Paramètres"))),
     settingsOpen && h(SettingsPanel, { onClose: () => setSettingsOpen(false) }),
     body);
 }
@@ -2478,19 +2579,24 @@ header[data-testid="topbar"] { display: none !important; }
 .acc-round.is-ghost:hover { color: var(--acc-text); }
 .acc-subnav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 28px; }
 .acc-settings-btn { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+.acc-tools-btn { display: inline-flex; align-items: center; gap: 6px; }
+.acc-page-title { font-size: 2rem; font-weight: 700; letter-spacing: -.02em; margin: 0; }
+.acc-settings-group { margin-top: 18px; }
+.acc-settings-group h3 { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--acc-sub); margin: 0 0 4px 8px; }
+.acc-shint { margin-top: 4px; }
 /* ---------- stats ---------- */
 .acc-stats { display: flex; flex-direction: column; gap: 20px; }
 .acc-scard { padding: 18px 20px; border-radius: 10px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.06); min-width: 0; }
 .acc-stats-top { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 20px; }
 @media (max-width: 1100px) { .acc-stats-top { grid-template-columns: minmax(0, 1fr); } }
-.acc-shero { padding: 26px 28px; border-radius: 12px; background: linear-gradient(135deg, #2b6b4f 0%, #1a8f4c 55%, #1ed760 130%); color: #fff; display: flex; flex-direction: column; justify-content: space-between; gap: 22px; }
+.acc-shero { padding: 24px 26px; border-radius: 10px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.06); display: flex; flex-direction: column; justify-content: space-between; gap: 22px; }
 .acc-shero-value { font-size: clamp(2.6rem, 5vw, 4rem); font-weight: 800; letter-spacing: -.03em; line-height: 1; }
-.acc-shero-label { margin-top: 8px; font-size: .8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.acc-shero-delta { text-transform: none; letter-spacing: 0; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: rgba(0,0,0,.22); }
-.acc-shero-delta.is-down { color: #ffd2d6; }
-.acc-shero-row { display: flex; flex-wrap: wrap; gap: 14px 32px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,.2); }
+.acc-shero-label { margin-top: 10px; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--acc-sub); display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; }
+.acc-shero-delta { text-transform: none; letter-spacing: 0; font-size: .8125rem; font-weight: 600; color: var(--acc-green); }
+.acc-shero-delta.is-down { color: #f15e6c; }
+.acc-shero-row { display: flex; flex-wrap: wrap; gap: 14px 36px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,.08); }
 .acc-shero-num { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; }
-.acc-shero-small { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; opacity: .8; }
+.acc-shero-small { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--acc-sub); }
 .acc-snums { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .acc-snum { display: flex; flex-direction: column; justify-content: center; }
 .acc-snum-value { font-size: 1.9rem; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
@@ -2532,10 +2638,7 @@ header[data-testid="topbar"] { display: none !important; }
 .acc-sfacts { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .acc-sfact { display: flex; justify-content: space-between; gap: 10px; font-size: .875rem; font-weight: 600; }
 .acc-shabit-label { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; margin: 10px 0 6px; }
-.acc-simport { display: flex; align-items: center; gap: 24px; }
-.acc-simport-text { flex: 1; min-width: 0; }
-.acc-simport-text p { margin: 0; line-height: 1.5; }
-.acc-simport-msg { margin-top: 8px !important; font-weight: 600; }
+.acc-simport-msg { margin-top: 6px; font-weight: 600; font-size: .875rem; }
 .acc-simport-actions { display: flex; align-items: center; gap: 10px; flex: none; }
 .acc-simport label.acc-chip { cursor: pointer; }
 .acc-simport label.is-busy { opacity: .5; pointer-events: none; }
