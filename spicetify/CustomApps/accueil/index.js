@@ -3,7 +3,7 @@
 // Données : requête GraphQL « home » de Spotify, filtrée par section ; bibliothèque via LibraryAPI.
 
 const { React } = Spicetify;
-const { useState, useEffect, useMemo } = React;
+const { useState, useEffect, useMemo, useRef, useLayoutEffect } = React;
 const h = React.createElement;
 
 // ---------- langue ----------
@@ -222,6 +222,9 @@ const EN = {
   "Rien dans cette ambiance ici.": "Nothing with this mood here.",
   "Styles": "Styles",
   "Ambiances": "Moods",
+  "Filtrer par styles ou par ambiances": "Filter by styles or moods",
+  "Trier": "Sort",
+  "Moins": "Less",
   "D'après les dossiers de ta bibliothèque": "Based on your library's folders",
   "D'après les caractéristiques audio de Spotify : énergie, valence (joyeux ↔ triste), dansabilité…": "Based on Spotify's audio features: energy, valence (happy ↔ sad), danceability…",
   "Analyse des ambiances de ta bibliothèque… {done}/{total} playlists (une fois par semaine)": "Analyzing your library's moods… {done}/{total} playlists (once a week)",
@@ -641,13 +644,15 @@ const byMood = (mood, moods) => (c) => mood === "all" || !!moods[c.uri]?.include
 // « fallback » récupère les sections qu'aucune règle ne reconnaît (autre langue, nouveau type de
 // section), sauf celles de SKIP_SECTIONS : rien ne disparaît.
 const SKIP_SECTIONS = /^(Recents|Récents|Récemment|Jump back in|Reprends|Shorts)|Vid[ée]os?\b|HomeShorts/i;
+const NEW_SECTIONS = /New releases|new music|Release Radar|Nouveaut|Sorties|Radar des sorties/i;
 const MUSIC_TABS = [
   { id: "playlists", label: tr("Mes playlists") },
   { id: "albums", label: tr("Mes albums") },
   { id: "later", label: tr("Plus tard") },
   { id: "mix", label: tr("Mix pour moi"), match: /^(Made [Ff]or|Your top mixes|Recommended [Ss]tations|Daily Mix|Conçu pour|Créé pour|Tes mix|Vos mix|Mix préférés|Radios? recommandées)/i },
-  { id: "new", label: tr("Nouveautés"), match: /(New releases|new music|Release Radar|Nouveaut|Sorties|Radar des sorties)/i },
-  { id: "discover", label: tr("Découvrir"), fallback: true, match: /(More like|For fans of|Based on your|Picked for you|Recommended|Playlists de|Discover|Similar|Plus du genre|Dans le style|Pour les fans|Sur la base|Choisi pour|Recommandé|Découv|Similaire)/i },
+  // Nouveautés et découvertes dans un même onglet, les nouveautés d'abord (first).
+  { id: "discover", label: tr("Découvrir"), fallback: true, first: NEW_SECTIONS,
+    match: new RegExp(NEW_SECTIONS.source + "|More like|For fans of|Based on your|Picked for you|Recommended|Playlists de|Discover|Similar|Plus du genre|Dans le style|Pour les fans|Sur la base|Choisi pour|Recommandé|Découv|Similaire", "i") },
 ];
 const PODCAST_TABS = [
   { id: "episodes", label: tr("Nouveaux épisodes"), match: /^(New episode|Nouvel épisode|Nouveaux épisodes)/i, merge: tr("Derniers épisodes de tes émissions") },
@@ -781,12 +786,14 @@ function sectionsFor(tab, allTabs, sections) {
     if (!groups.has(title)) groups.set(title, []);
     groups.get(title).push(...s.items);
   }
-  return [...groups].map(([title, items]) => {
+  const out = [...groups].map(([title, items]) => {
     const seen = new Set();
     let unique = items.filter((i) => !seen.has(i.uri) && seen.add(i.uri));
     if (tab.merge && unique.some((i) => i.date)) unique = unique.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
     return { title, items: unique };
   });
+  // Sections à mettre en tête (tri stable : l'ordre de Spotify est gardé dans chaque groupe).
+  return tab.first ? out.sort((a, b) => tab.first.test(b.title) - tab.first.test(a.title)) : out;
 }
 
 function readPlays() {
@@ -1138,19 +1145,48 @@ function MoodBar({ items, moods, progress, error, value, onChange }) {
     try { await playMood(mood, items.filter(byMood(mood, moods))); } catch (e) { notify(tr("Lecture impossible : ") + errMsg(e), true); }
     setBusy(null);
   };
-  return h("div", { className: "acc-styles" },
-    h("button", { className: "acc-schip" + (value === "all" ? " is-on" : ""), onClick: () => onChange("all") }, tr("Tous"), h("span", { className: "acc-chip-n" }, items.length)),
+  return h(FitRow, null,
+    h("button", { key: "all", className: "acc-schip" + (value === "all" ? " is-on" : ""), onClick: () => onChange("all") }, tr("Tous"), value === "all" && h("span", { className: "acc-chip-n" }, items.length)),
     options.map((m) => h("span", { key: m, className: "acc-schip" + (value === m ? " is-on" : "") },
-      m !== VARIED && h("button", { className: "acc-schip-play", title: tr("Lancer tout {style} en aléatoire", { style: tr(m) }), disabled: !!busy, onClick: () => launch(m) }, busy === m ? "…" : h(PlayIcon)),
-      h("button", { className: "acc-schip-label", onClick: () => onChange(m) }, tr(m), h("span", { className: "acc-chip-n" }, counts[m])))));
+      value === m && m !== VARIED && h("button", { className: "acc-schip-play", title: tr("Lancer tout {style} en aléatoire", { style: tr(m) }), disabled: !!busy, onClick: () => launch(m) }, busy === m ? "…" : h(PlayIcon)),
+      h("button", { className: "acc-schip-label", onClick: () => onChange(m) }, tr(m), value === m && h("span", { className: "acc-chip-n" }, counts[m])))));
 }
 
 // Sélecteur Styles | Ambiances, mémorisé (réglage chipAxis) et commun à tous les onglets.
+const AXES = [
+  { id: "styles", label: tr("Styles"), title: tr("D'après les dossiers de ta bibliothèque") },
+  { id: "moods", label: tr("Ambiances"), title: tr("D'après les caractéristiques audio de Spotify : énergie, valence (joyeux ↔ triste), dansabilité…") },
+];
 function AxisSwitch({ axis, onChange }) {
-  const opt = (id, label, title) => h("button", { key: id, className: "acc-axis-opt" + (axis === id ? " is-on" : ""), title, onClick: () => onChange(id) }, label);
-  return h("div", { className: "acc-axis", role: "group" },
-    opt("styles", tr("Styles"), tr("D'après les dossiers de ta bibliothèque")),
-    opt("moods", tr("Ambiances"), tr("D'après les caractéristiques audio de Spotify : énergie, valence (joyeux ↔ triste), dansabilité…")));
+  return h("div", { className: "acc-axis", role: "group", "aria-label": tr("Filtrer par styles ou par ambiances") },
+    AXES.map((a) => h("button", { key: a.id, className: "acc-axis-opt" + (axis === a.id ? " is-on" : ""), title: a.title, "aria-pressed": axis === a.id, onClick: () => onChange(a.id) }, a.label)));
+}
+
+const ChevronIcon = () => h("svg", { viewBox: "0 0 16 16", width: 12, height: 12, fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" }, h("path", { d: "M4 6l4 4 4-4" }));
+const CheckIcon = () => h("svg", { viewBox: "0 0 16 16", width: 14, height: 14, fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" }, h("path", { d: "M3 8.5l3.2 3L13 5" }));
+
+// Menu déroulant « Libellé ⌄ » ; se ferme au clic ailleurs ou sur Échap.
+function Dropdown({ label, options, value, onChange, className = "", title }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => { if (e.type === "keydown" ? e.key === "Escape" : !ref.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", close); };
+  }, [open]);
+  return h("div", { className: "acc-dd " + className, ref },
+    h("button", { className: "acc-dd-btn", title, "aria-haspopup": "listbox", "aria-expanded": open, onClick: () => setOpen(!open) }, label, h(ChevronIcon)),
+    open && h("div", { className: "acc-dd-menu", role: "listbox" },
+      options.map((o) => h("button", { key: o.id, role: "option", "aria-selected": o.id === value, className: "acc-dd-opt" + (o.id === value ? " is-on" : ""), title: o.title,
+        onClick: () => { onChange(o.id); setOpen(false); } }, o.label, o.id === value && h(CheckIcon)))));
+}
+
+// Tri des barres d'outils : un menu au lieu d'une rangée de boutons.
+function SortMenu({ options, value, onChange }) {
+  const cur = options.find((o) => o.id === value) || options[0];
+  return h(Dropdown, { className: "is-sort", options, value, onChange, label: cur.label, title: cur.title || tr("Trier") });
 }
 
 // [axe, setAxe] ; resetFilter remet le filtre de l'onglet à « Tous » à chaque changement d'axe,
@@ -1162,7 +1198,7 @@ function useChipAxis(resetFilter) {
   return [axis, (a) => set({ chipAxis: a })];
 }
 function ChipBar({ axis, setAxis, styleBar, moodBar }) {
-  return h("div", { className: "acc-chipbar" }, h(AxisSwitch, { axis, onChange: setAxis }), axis === "moods" ? h(MoodBar, moodBar) : h(StyleBar, styleBar));
+  return h("div", { className: "acc-chipbar" }, h(AxisSwitch, { axis, onChange: setAxis }), h("span", { className: "acc-chipbar-sep" }), axis === "moods" ? h(MoodBar, moodBar) : h(StyleBar, styleBar));
 }
 
 // Dossiers de style de la bibliothèque, par libellé (« Électro » → dossier ELECTRO)
@@ -1192,11 +1228,36 @@ function StyleBar({ items, styles, also = {}, names, progress, value, onChange }
     try { await playFolder(folders[st]); } catch (e) { Spicetify.showNotification?.(tr("Lecture impossible : ") + (e?.message || e), true); }
     setBusy(null);
   };
-  return h("div", { className: "acc-styles" },
-    h("button", { className: "acc-schip" + (value === "all" ? " is-on" : ""), onClick: () => onChange("all") }, tr("Tous"), h("span", { className: "acc-chip-n" }, items.length)),
+  return h(FitRow, null,
+    h("button", { key: "all", className: "acc-schip" + (value === "all" ? " is-on" : ""), onClick: () => onChange("all") }, tr("Tous"), value === "all" && h("span", { className: "acc-chip-n" }, items.length)),
     options.map((st) => h("span", { key: st, className: "acc-schip" + (value === st ? " is-on" : "") },
-      folders[st] && h("button", { className: "acc-schip-play", title: tr("Lancer tout {style} en aléatoire", { style: tr(st) }), disabled: !!busy, onClick: () => launch(st) }, busy === st ? "…" : h(PlayIcon)),
-      h("button", { className: "acc-schip-label", onClick: () => onChange(st) }, tr(st), h("span", { className: "acc-chip-n" }, counts[st])))));
+      value === st && folders[st] && h("button", { className: "acc-schip-play", title: tr("Lancer tout {style} en aléatoire", { style: tr(st) }), disabled: !!busy, onClick: () => launch(st) }, busy === st ? "…" : h(PlayIcon)),
+      h("button", { className: "acc-schip-label", onClick: () => onChange(st) }, tr(st), value === st && h("span", { className: "acc-chip-n" }, counts[st])))));
+}
+
+// Une seule ligne de chips : ce qui ne tient pas se replie derrière « +N », qui déplie la ligne.
+// « +N » passe en surbrillance si le filtre choisi est dans la partie repliée.
+function FitRow({ children }) {
+  const ref = useRef(null);
+  const [hidden, setHidden] = useState({ n: 0, on: false });
+  const [open, setOpen] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const kids = [...el.children];
+      const top = kids[0]?.offsetTop ?? 0;
+      const off = kids.filter((k) => k.offsetTop > top + 4);
+      setHidden((p) => (p.n === off.length && p.on === off.some((k) => k.classList.contains("is-on")) ? p : { n: off.length, on: off.some((k) => k.classList.contains("is-on")) }));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+  return h(React.Fragment, null,
+    h("div", { className: "acc-styles acc-fit" + (open ? " is-open" : ""), ref }, children),
+    (hidden.n > 0 || open) && h("button", { className: "acc-more-chip" + (!open && hidden.on ? " is-on" : ""), onClick: () => setOpen(!open) }, open ? tr("Moins") : `+${hidden.n}`));
 }
 
 function Toolbar({ children }) {
@@ -1229,8 +1290,8 @@ function SubBar({ items, style, styles, subs, value, onChange }) {
     setBusy(null);
   };
   const chip = (id, label, n, f) => h("span", { key: id, className: "acc-schip is-sub" + (value === id ? " is-on" : "") },
-    f && h("button", { className: "acc-schip-play", title: tr("Lancer tout {style} en aléatoire", { style: label }), disabled: !!busy, onClick: () => launch(f) }, busy === f.uri ? "…" : h(PlayIcon)),
-    h("button", { className: "acc-schip-label", onClick: () => onChange(id) }, label, h("span", { className: "acc-chip-n" }, n)));
+    value === id && f && h("button", { className: "acc-schip-play", title: tr("Lancer tout {style} en aléatoire", { style: label }), disabled: !!busy, onClick: () => launch(f) }, busy === f.uri ? "…" : h(PlayIcon)),
+    h("button", { className: "acc-schip-label", onClick: () => onChange(id) }, label, value === id && h("span", { className: "acc-chip-n" }, n)));
   return h("div", { className: "acc-styles acc-subs" },
     h("button", { className: "acc-schip is-sub" + (value === "all" ? " is-on" : ""), onClick: () => onChange("all") }, tr("Tout {style}", { style: tr(style) })),
     children.map((f) => chip(f.name, f.name, counts[f.name], f)),
@@ -1272,9 +1333,9 @@ function Tile({ card, showOwner }) {
 // id "all" : une seule grille (paramètre splitPlaylists désactivé), propriétaire en infobulle
 // pour les playlists qui ne sont pas à soi.
 // Toutes les playlists d'un coup : les pochettes ne se chargent qu'en arrivant à l'écran (lazy).
-function Column({ id, label, items }) {
+function Column({ id, label, items, action }) {
   return h("div", { className: "acc-col" },
-    h("div", { className: "acc-col-head" }, h("h2", null, label), h("span", { className: "acc-count" }, items.length)),
+    h("div", { className: "acc-col-head" }, h("h2", null, label), h("span", { className: "acc-count" }, items.length), action),
     items.length
       ? h("div", { className: "acc-tiles" }, items.map((c) => h(Tile, { key: c.uri, card: c, showOwner: id === "others" || (id === "all" && c.group !== "self") })))
       : h("div", { className: "acc-sub" }, tr("Aucune playlist")));
@@ -1659,13 +1720,12 @@ function MyPlaylists() {
         h(ChipBar, { axis, setAxis,
           styleBar: { items: sorted, styles, also, names, progress, value: style, onChange: (st) => { setStyle(st); setSub("all"); } },
           moodBar: { items: sorted, ...mood, value: style, onChange: setStyle } }),
-        h("div", { className: "acc-sorts" },
-          h(Sorts, { options: sorts, value: sort, onChange: setSort }),
-          h("button", { className: "acc-sort" + (tidy ? " is-on" : ""), title: tr("Playlists mal rangées, en vrac ou en sommeil, sous-dossiers à créer"), onClick: () => setTidy(!tidy) }, tr("Ranger")))),
+        h(SortMenu, { options: sorts, value: sort, onChange: setSort })),
       style !== "all" && axis === "styles" && h(SubBar, { items: inStyle, style, styles, subs, value: sub, onChange: setSub }),
       tidy && h(TidyPanel, { onClose: () => setTidy(false) }),
       h("div", { className: "acc-cols" },
-        columns.map((c) => h(Column, { key: c.id + sort + style + sub, id: c.id, label: c.label, items: c.id === "all" ? shown : shown.filter((p) => p.group === c.id) })))));
+        columns.map((c) => h(Column, { key: c.id + sort + style + sub, id: c.id, label: c.label, items: c.id === "all" ? shown : shown.filter((p) => p.group === c.id),
+          action: (c.id === "self" || c.id === "all") && h("button", { className: "acc-col-action" + (tidy ? " is-on" : ""), title: tr("Playlists mal rangées, en vrac ou en sommeil, sous-dossiers à créer"), onClick: () => setTidy(!tidy) }, h(WandIcon), tr("Ranger")) })))));
 }
 
 const ALBUM_SORTS = [
@@ -1708,7 +1768,7 @@ function MyAlbums() {
         h(ChipBar, { axis, setAxis,
           styleBar: { items: sorted, styles, also, names, progress, value: style, onChange: setStyle },
           moodBar: { items: sorted, ...mood, value: style, onChange: setStyle } }),
-        h(Sorts, { options: ALBUM_SORTS, value: sort, onChange: setSort })),
+        h(SortMenu, { options: ALBUM_SORTS, value: sort, onChange: setSort })),
       datesProgress && h("div", { className: "acc-hint acc-note" }, tr("Lecture des dates de sortie… {done}/{total} (une seule fois)", datesProgress)),
       h(SectionlessGrid, { key: sort + style, items: shown })));
 }
@@ -1936,7 +1996,7 @@ function Discography({ id }) {
           chip("all", tr("Tout"), d.releases.length),
           Object.entries(RELEASE_TYPES).map(([t, label]) => chip(t, label, count(t))),
           chip("saved", tr("Dans ta bibliothèque"), count("saved"))),
-        h(Sorts, { options: DISCO_SORTS, value: sort, onChange: setSort })),
+        h(SortMenu, { options: DISCO_SORTS, value: sort, onChange: setSort })),
       h(Grid, { items: cards }));
   });
 }
@@ -2726,6 +2786,9 @@ function SettingsPanel({ onClose }) {
 const ChartIcon = () =>
   h("svg", { viewBox: "0 0 24 24", width: 16, height: 16, fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" },
     h("path", { d: "M5 20V11M12 20V4M19 20v-6" }));
+const WandIcon = () =>
+  h("svg", { viewBox: "0 0 24 24", width: 14, height: 14, fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" },
+    h("path", { d: "M4 20L15 9M14 4v2M19 9h2M17.5 5.5l1.5-1.5M18 14v2M9 4v1" }));
 const SettingsIcon = () =>
   h("svg", { viewBox: "0 0 24 24", width: 16, height: 16, fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" },
     h("path", { d: "M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1" }),
@@ -2759,7 +2822,8 @@ function AccueilApp() {
       h("header", { className: "acc-header" }, h("h1", { className: "acc-page-title" }, tr("Stats"))),
       h("nav", { className: "acc-subnav" },
         STATS_PERIODS.map((t) => h("button", { key: t.id, className: "acc-chip" + (t.id === period ? " is-on" : ""), onClick: () => setPeriod(t.id) }, t.label)),
-        h("button", { className: "acc-sort acc-settings-btn" + (settingsOpen ? " is-on" : ""), onClick: () => setSettingsOpen(!settingsOpen) }, h(SettingsIcon), tr("Paramètres"))),
+        h("span", { className: "acc-subnav-end" },
+          h("button", { className: "acc-icon-btn" + (settingsOpen ? " is-on" : ""), title: tr("Paramètres"), "aria-label": tr("Paramètres"), onClick: () => setSettingsOpen(!settingsOpen) }, h(SettingsIcon)))),
       settingsOpen && h(SettingsPanel, { onClose: () => setSettingsOpen(false) }),
       h(StatsView, { period }));
   }
@@ -2780,11 +2844,13 @@ function AccueilApp() {
         MAIN_TABS.map((m) =>
           h("button", { key: m.id, className: "acc-main-tab" + (main === m.id ? " is-on" : ""), onClick: () => setMain(m.id) }, m.label))),
       h(PinnedHeroes, { main })),
-    h("nav", { className: "acc-subnav" },
-      tabs.map((t) => h("button", { key: t.id, className: "acc-chip" + (t.id === tab.id ? " is-on" : ""), onClick: () => setSub({ ...sub, [main]: t.id }) },
+    h("nav", { className: "acc-subnav is-tabs" },
+      // « Plus tard » n'apparaît que si la liste contient quelque chose (ou si on est dessus).
+      tabs.filter((t) => t.id !== "later" || later.length > 0 || t.id === tab.id).map((t) => h("button", { key: t.id, className: "acc-subtab" + (t.id === tab.id ? " is-on" : ""), onClick: () => setSub({ ...sub, [main]: t.id }) },
         t.label, t.id === "later" && later.length > 0 && h("span", { className: "acc-chip-n" }, later.length))),
-      h("button", { className: "acc-sort acc-settings-btn", onClick: () => Spicetify.Platform.History.push("/accueil/stats") }, h(ChartIcon), tr("Stats")),
-      h("button", { className: "acc-sort acc-tools-btn" + (settingsOpen ? " is-on" : ""), onClick: () => setSettingsOpen(!settingsOpen) }, h(SettingsIcon), tr("Paramètres"))),
+      h("span", { className: "acc-subnav-end" },
+        h("button", { className: "acc-icon-btn", title: tr("Stats"), "aria-label": tr("Stats"), onClick: () => Spicetify.Platform.History.push("/accueil/stats") }, h(ChartIcon)),
+        h("button", { className: "acc-icon-btn" + (settingsOpen ? " is-on" : ""), title: tr("Paramètres"), "aria-label": tr("Paramètres"), onClick: () => setSettingsOpen(!settingsOpen) }, h(SettingsIcon)))),
     settingsOpen && h(SettingsPanel, { onClose: () => setSettingsOpen(false) }),
     body);
 }
@@ -2819,8 +2885,16 @@ header[data-testid="topbar"] { display: none !important; }
 .acc-round.is-ghost { background: transparent; color: var(--acc-sub); }
 .acc-round.is-ghost:hover { color: var(--acc-text); }
 .acc-subnav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 28px; }
-.acc-settings-btn { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
-.acc-tools-btn { display: inline-flex; align-items: center; gap: 6px; }
+/* Sous-onglets de l'accueil : texte souligné, pour les distinguer des chips de filtre. */
+.acc-subnav.is-tabs { gap: 4px 24px; margin-bottom: 18px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.acc-subtab { display: inline-flex; align-items: baseline; gap: 6px; margin-bottom: -1px; padding: 10px 0; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--acc-sub); font: inherit; font-size: .9375rem; font-weight: 700; cursor: pointer; }
+.acc-subtab:hover { color: var(--acc-text); }
+.acc-subtab.is-on { color: var(--acc-text); border-bottom-color: var(--acc-green); }
+.acc-subtab .acc-chip-n { margin-left: 0; font-weight: 400; }
+.acc-subnav-end { margin-left: auto; display: flex; gap: 2px; }
+.acc-icon-btn { width: 32px; height: 32px; border: 0; border-radius: 50%; display: grid; place-items: center; background: none; color: var(--acc-sub); cursor: pointer; }
+.acc-icon-btn:hover { background: var(--acc-chip); color: var(--acc-text); }
+.acc-icon-btn.is-on { color: var(--acc-text); background: var(--acc-chip-hover); }
 .acc-page-title { font-size: 2rem; font-weight: 700; letter-spacing: -.02em; margin: 0; }
 .acc-settings-group { margin-top: 18px; }
 .acc-settings-group h3 { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--acc-sub); margin: 0 0 4px 8px; }
@@ -2965,14 +3039,32 @@ header[data-testid="topbar"] { display: none !important; }
 .acc-heroes { display: flex; gap: 12px; flex-wrap: nowrap; justify-content: flex-end; flex: 1 1 auto; min-width: 0; }
 .acc-liked-art.is-season { background: linear-gradient(135deg, #b3541e, #f2c14e); overflow: hidden; }
 .acc-liked-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.acc-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; margin-bottom: 18px; }
+.acc-toolbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px 24px; margin-bottom: 18px; }
 .acc-styles { display: flex; flex-wrap: wrap; gap: 6px; }
-.acc-chipbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
-.acc-axis { display: inline-flex; flex: none; padding: 2px; border-radius: 999px; background: var(--acc-chip); }
-.acc-axis-opt { border: 0; border-radius: 999px; padding: 4px 10px; background: none; color: var(--acc-sub); font: inherit; font-size: .75rem; font-weight: 700; cursor: pointer; }
+/* Ligne de filtres : menu Styles | Ambiances, séparateur, chips sur une ligne (+N pour le reste). */
+.acc-chipbar { display: flex; align-items: flex-start; gap: 8px; flex: 1 1 auto; min-width: 0; }
+.acc-chipbar > .acc-hint { align-self: center; }
+.acc-chipbar-sep { flex: none; width: 1px; height: 18px; margin: 5px 2px 0; background: rgba(255,255,255,.16); }
+.acc-fit { flex: 0 1 auto; min-width: 0; max-height: 28px; overflow: hidden; }
+.acc-fit.is-open { max-height: none; }
+.acc-more-chip { flex: none; height: 28px; padding: 0 10px; border: 0; border-radius: 999px; background: none; color: var(--acc-sub); font: inherit; font-size: .8125rem; cursor: pointer; }
+.acc-more-chip:hover { color: var(--acc-text); background: var(--acc-chip); }
+.acc-more-chip.is-on { background: var(--acc-text); color: #000; }
+.acc-dd { position: relative; flex: none; }
+.acc-dd-btn { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 6px; border: 0; border-radius: 4px; background: none; color: var(--acc-sub); font: inherit; font-size: .8125rem; white-space: nowrap; cursor: pointer; }
+.acc-dd-btn:hover, .acc-dd-btn[aria-expanded="true"] { color: var(--acc-text); }
+.acc-axis { display: inline-flex; flex: none; height: 28px; box-sizing: border-box; padding: 2px; border-radius: 999px; background: var(--acc-chip); }
+.acc-axis-opt { border: 0; border-radius: 999px; padding: 0 10px; background: none; color: var(--acc-sub); font: inherit; font-size: .75rem; font-weight: 700; cursor: pointer; }
 .acc-axis-opt:hover { color: var(--acc-text); }
 .acc-axis-opt.is-on { background: rgba(255,255,255,.16); color: var(--acc-text); }
-.acc-schip { display: inline-flex; align-items: center; border: 0; border-radius: 999px; background: var(--acc-chip); color: var(--acc-text); font-size: .8125rem; padding: 0; cursor: pointer; }
+.acc-dd-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; min-width: 200px; padding: 4px; border-radius: 6px; background: #282828; box-shadow: 0 16px 24px rgba(0,0,0,.3), 0 6px 8px rgba(0,0,0,.2); }
+.acc-dd.is-sort .acc-dd-menu { left: auto; right: 0; }
+.acc-dd-opt { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; padding: 10px 12px; border: 0; border-radius: 2px; background: none; color: rgba(255,255,255,.9); font: inherit; font-size: .875rem; text-align: left; white-space: nowrap; cursor: pointer; }
+.acc-dd-opt:hover { background: rgba(255,255,255,.1); }
+.acc-dd-opt.is-on { color: var(--acc-green); }
+.acc-col-action { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none; color: var(--acc-sub); font: inherit; font-size: .8125rem; cursor: pointer; }
+.acc-col-action:hover, .acc-col-action.is-on { color: var(--acc-text); }
+.acc-schip { display: inline-flex; align-items: center; height: 28px; border: 0; border-radius: 999px; background: var(--acc-chip); color: var(--acc-text); font-size: .8125rem; padding: 0; cursor: pointer; }
 button.acc-schip { padding: 5px 12px; }
 .acc-schip:hover { background: var(--acc-chip-hover); }
 .acc-schip.is-on { background: var(--acc-text); color: #000; }

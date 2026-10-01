@@ -14,14 +14,14 @@ For the **Spotify desktop app downloaded from spotify.com** (not the Microsoft S
 ## What it changes
 
 ### Home
-- **Music / Podcasts & books tabs**, each with its own sub-menu: my playlists, my albums, listen later, mixes for me, new releases, discover. On the podcast side: new episodes, resume, your shows, audiobooks (yours and suggested ones), discover. Any section the theme doesn't recognize lands in Discover instead of disappearing.
+- **Music / Podcasts & books tabs**, each with its own sub-menu: my playlists, my albums, listen later (only when the list isn't empty), mixes for me, discover (new releases first). On the podcast side: new episodes, resume, your shows, audiobooks (yours and suggested ones), discover. Any section the theme doesn't recognize lands in Discover instead of disappearing.
 - **My playlists in three columns**: yours, other people's, Spotify's. A single grid if you turn off “Split playlists by owner” in **Settings** (at the end of the sub-tab row).
 - **Style filters** in every sub-menu, with a ▶ to shuffle a whole style. Styles come from your folders (see [Adapting it to your library](#adapting-it-to-your-library)).
   - **Sub-filters**: pick a style and its subfolders show up as a second row (Hip-hop › Trap US), each with its own ▶.
   - **Mixed playlists** (two clear styles, neither dominant, e.g. rap + electro) show up under both filters, wherever they're filed.
-- **Mood filters**: the *Styles | Moods* switch at the start of the filter row swaps the chips for moods — Danceable, Upbeat, Intense, Feel good, Chill, Soft / Melancholic, Acoustic, Focus, Varied — in My playlists, My albums and Spotify's recommendations (mixes, new releases, discover). They come from Spotify's own audio features (energy, valence, danceability, acousticness, instrumentalness): each track gets a mood, and a playlist or album takes the one or two that cover a real share of its tracks, otherwise *Varied*. Thresholds are relative to your library. The ▶ of a mood shuffles only the tracks that have it.
+- **Mood filters**: the *Styles | Moods* switch at the start of the filter row swaps the chips for moods — Danceable, Upbeat, Intense, Feel good, Chill, Soft / Melancholic, Acoustic, Focus, Varied — in My playlists, My albums and Spotify's recommendations (mixes, discover). They come from Spotify's own audio features (energy, valence, danceability, acousticness, instrumentalness): each track gets a mood, and a playlist or album takes the one or two that cover a real share of its tracks, otherwise *Varied*. Thresholds are relative to your library. The ▶ of a mood shuffles only the tracks that have it.
 - **Play counts** on every playlist and album, and a *Most played* sort.
-- **Tidy-up suggestions** (*Tidy up* button in My playlists):
+- **Tidy-up suggestions** (*Tidy up*, next to the My playlists heading):
   - playlists whose artists mostly belong to another style folder;
   - loose playlists at the library root with a clear style;
   - playlists not played in over a year, when Spotify knows the date;

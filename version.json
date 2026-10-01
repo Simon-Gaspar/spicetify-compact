@@ -1,7 +1,7 @@
 {
-  "version": "1.5.0",
+  "version": "1.6.0",
   "notes": {
-    "fr": "Filtres par ambiance (Dansant, Chill, Concentration…) d'après les données audio de Spotify, dans Mes playlists, Mes albums et les recommandations : sélecteur « Styles | Ambiances ».",
-    "en": "Mood filters (Danceable, Chill, Focus…) from Spotify's audio data, in My playlists, My albums and recommendations: “Styles | Moods” switch."
+    "fr": "Accueil plus aéré : sous-onglets en texte, filtres sur une ligne (▶ et nombre sur le filtre choisi, « +N » pour le reste), tri en menu, Nouveautés réunies avec Découvrir.",
+    "en": "Cleaner home page: text sub-tabs, filters on one line (▶ and count on the selected filter, “+N” for the rest), sort menu, New releases merged into Discover."
   }
 }
