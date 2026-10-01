@@ -30,6 +30,15 @@ For the **Spotify desktop app downloaded from spotify.com** (not the Microsoft S
 - **Albums by release date**: *Release ↓* and *Release ↑* sorts.
 - **3 slots at the top: Liked Songs + 2 playlists of your choice**. Empty dashed slots show where they go: right-click a playlist, album, artist, show or folder → *Pin to home*. Always on one line. Drag any card, Liked Songs included, to reorder them. Liked Songs is always there, with play or shuffle.
 
+### Stats
+A *Stats* tab next to Music and Podcasts, by period (today, 7 days, 30 days, this year, all time):
+- **time listened**, plays, artists, unique tracks, daily average, and the change vs the previous period;
+- **estimated payout to artists** (~$0.004 per play over 30 s), **day streak** and best streak, **new artists** and tracks discovered, **skip rate**;
+- **activity** chart, **top tracks, artists and albums** (play counts and time), **where you listen from** (playlists, albums, radios), **styles** (from your style folders), **habits** (peak hour, longest session, by hour and weekday), **on repeat** and **most skipped**;
+- **According to Spotify**: the top artists and tracks Spotify computes for you over 4 weeks, 6 months or a year (order only), available right after install.
+
+Every track you play is recorded locally from the moment the theme is installed (IndexedDB, on this computer only). To go back further, request your **extended streaming history** from Spotify (Account → Privacy) and import the `Streaming_History_Audio_*.json` files with *Import…*: only titles, artists, albums, dates and durations are kept (not IP addresses, countries or devices). *Remove import* takes them out again.
+
 ### Fullscreen playback
 The fullscreen button in the player bar (or ⤢ in the Now Playing panel) opens a fullscreen view:
 - large cover art and playback controls;
@@ -112,6 +121,7 @@ This data stays in Spotify on the computer where the theme is installed. It does
 | Listen later | The *Listen later* list. |
 | Pins | The cards at the top of the home page. |
 | Styles, release dates | Cached for speed (styles are recomputed every week). |
+| Listening stats | Every play recorded since install, plus your imported history (IndexedDB `accueil-stats`). |
 
 ## Troubleshooting
 

@@ -11,10 +11,12 @@
 // 9. Avis de mise à jour : compare ACCUEIL_VERSION à version.json du dépôt GitHub (une fois par jour).
 // 8. Épingles de l'accueil : playlists, albums, dossiers, artistes ou émissions affichés en haut
 //    de la page, choisis au clic droit (« Épingler sur l'accueil »).
+// 10. Statistiques d'écoute : chaque titre ou épisode joué est noté (durée réellement écoutée, passé
+//    ou non) dans une base IndexedDB locale, lue par l'onglet Stats de l'accueil.
 // 5. Vérifie les API internes de Spotify dont dépend le thème et signale celles qui manquent
 //    (elles changent parfois avec les mises à jour de Spotify).
 // Version installée du thème : à incrémenter avec version.json à la racine du dépôt à chaque publication.
-const ACCUEIL_VERSION = "1.2.0";
+const ACCUEIL_VERSION = "1.3.0";
 
 // Langue : français si Spotify est en français, anglais sinon ; accueil:lang ("fr" | "en") force une
 // langue. Calculée à chaque appel (Spicetify.Locale n'est pas toujours prêt au démarrage).
@@ -460,6 +462,109 @@ function accueilT(fr, vars) {
     } catch (e) { warn("mise à jour")(e); }
   })();
 
-  Object.assign(window.AccueilCore, { version: ACCUEIL_VERSION, readLater, addLater, removeLater, inLater, findItemMenu, describe, readPins, pinUri, unpinUri, isPinned,
+  // ---------- 10. statistiques d'écoute ----------
+  // Une écoute = un passage sur un titre ou un épisode, avec le temps réellement écouté (pauses
+  // déduites, plafonné à la durée du morceau : une veille en pleine lecture ne gonfle rien). Le morceau
+  // en cours est sauvé toutes les 15 s (accueil:stats-pending) et noté au démarrage suivant si Spotify
+  // a été fermé avant la fin. Les écoutes faites sur un autre appareil comptent si cette app est ouverte
+  // (Spotify Connect) ; sinon, l'import de l'historique étendu (onglet Stats) les rattrape.
+  // Enregistrement : { k, t (fin, ms), ms, d (durée), u, n, a/an (artistes : uri/noms), al/aln (album),
+  // img, c/cn (contexte : uri/nom), ty ("track" | "episode"), s (passé : moins de 30 s), src ("live" | "import") }.
+  const STATS_DB = "accueil-stats";
+  const PENDING_KEY = "accueil:stats-pending";
+  let statsDb = null;
+  const openStats = () => (statsDb ||= new Promise((resolve, reject) => {
+    const req = indexedDB.open(STATS_DB, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("plays", { keyPath: "k" }).createIndex("t", "t");
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => { statsDb = null; reject(req.error); };
+  }));
+  const statsTx = async (mode, fn) => {
+    const db = await openStats();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("plays", mode);
+      const out = fn(tx.objectStore("plays"));
+      tx.oncomplete = () => resolve(out?.result ?? out);
+      tx.onerror = () => reject(tx.error);
+    });
+  };
+  // quiet : pas d'événement (import en plusieurs lots : un seul signal à la fin, via statsAdd([])).
+  const statsAdd = async (records, quiet) => {
+    if (records.length) await statsTx("readwrite", (store) => { for (const r of records) store.put(r); });
+    if (!quiet) window.dispatchEvent(new CustomEvent("accueil:stats", { detail: records }));
+    return records.length;
+  };
+  const statsAll = () => statsTx("readonly", (store) => store.getAll());
+  const statsRemove = (keys) => statsTx("readwrite", (store) => { for (const k of keys) store.delete(k); })
+    .then(() => window.dispatchEvent(new CustomEvent("accueil:stats", { detail: [] })));
+
+  const SKIP_MS = 30000; // seuil de Spotify pour compter une écoute
+  const nowPlaying = () => {
+    const d = Spicetify.Player.data;
+    const it = d?.item || d?.track;
+    if (!it?.uri || it.isLocal) return null;
+    const ty = it.uri.startsWith("spotify:episode:") ? "episode" : it.uri.startsWith("spotify:track:") ? "track" : null;
+    if (!ty) return null;
+    const m = it.metadata || {};
+    const artists = (it.artists || []).filter((a) => a?.name);
+    const show = it.show || it.podcast;
+    // Images : « spotify:image:<id> » étiquetées small / standard / large ; on garde la standard (300 px).
+    const imgs = it.album?.images || it.images || [];
+    const pick = (imgs.find((i) => i.label === "standard") || imgs[0])?.url || m.image_url || "";
+    const img = pick.startsWith("spotify:image:") ? `https://i.scdn.co/image/${pick.slice(14)}` : pick;
+    // Contexte : l'uri d'origine quand Spotify la donne (un artiste derrière « spotify:list:… Popular »).
+    const ctx = d.context || {};
+    return {
+      u: it.uri, ty, n: it.name || m.title || "",
+      d: it.duration?.milliseconds ?? (Number(m.duration) || 0),
+      a: artists.map((a) => a.uri || ""), an: artists.length ? artists.map((a) => a.name) : [m.artist_name || show?.name || ""].filter(Boolean),
+      al: it.album?.uri || show?.uri || m.album_uri || "", aln: it.album?.name || show?.name || m.album_title || "",
+      img, c: ctx.metadata?.["reporting.uri"] || ctx.uri || "", cn: ctx.metadata?.context_description || "",
+    };
+  };
+  let cur = null; // { ...nowPlaying(), acc, since }
+  const played = (c) => c.acc + (c.since ? Date.now() - c.since : 0);
+  const recordOf = (c, ms, end) => {
+    const capped = c.d ? Math.min(ms, c.d) : ms;
+    return { k: `${c.u}@${Math.floor(end / 1000)}`, t: end, ms: Math.round(capped), d: c.d, u: c.u, n: c.n, a: c.a, an: c.an, al: c.al, aln: c.aln, img: c.img, c: c.c, cn: c.cn, ty: c.ty,
+      s: capped < SKIP_MS && (!c.d || c.d > SKIP_MS + 3000), src: "live" };
+  };
+  const commit = () => {
+    const c = cur;
+    cur = null;
+    if (!c) return;
+    const ms = played(c);
+    if (ms >= 1500) statsAdd([recordOf(c, ms, Date.now())]).catch(warn("stats"));
+  };
+  // Morceau en cours lors de la dernière fermeture : repris s'il joue encore au redémarrage (moins de
+  // 10 min après), sinon noté tel quel.
+  let pending = null;
+  try { pending = JSON.parse(Spicetify.LocalStorage.get(PENDING_KEY) || "null"); } catch {}
+  Spicetify.LocalStorage.remove?.(PENDING_KEY);
+  const begin = () => {
+    const m = nowPlaying();
+    let acc = 0;
+    if (pending && m) {
+      if (m.u === pending.u && Date.now() - pending.at < 600000) acc = pending.ms;
+      else if (pending.u && pending.ms >= 1500) statsAdd([recordOf(pending, pending.ms, pending.at)]).catch(warn("stats"));
+      pending = null;
+    }
+    cur = m ? { ...m, acc, since: Spicetify.Player.isPlaying() ? Date.now() : null } : null;
+  };
+  const onPlayPause = () => {
+    if (!cur) return begin();
+    const playing = Spicetify.Player.isPlaying();
+    if (playing && !cur.since) cur.since = Date.now();
+    else if (!playing && cur.since) { cur.acc += Date.now() - cur.since; cur.since = null; }
+  };
+  Spicetify.Player.addEventListener("songchange", () => { commit(); begin(); });
+  Spicetify.Player.addEventListener("onplaypause", onPlayPause);
+  setInterval(() => {
+    if (!cur) return begin();
+    try { Spicetify.LocalStorage.set(PENDING_KEY, JSON.stringify({ ...cur, ms: played(cur), at: Date.now() })); } catch {}
+  }, 15000);
+  begin();
+
+  Object.assign(window.AccueilCore, { version: ACCUEIL_VERSION, statsAll, statsAdd, statsRemove, readLater, addLater, removeLater, inLater, findItemMenu, describe, readPins, pinUri, unpinUri, isPinned,
     setPins: (list) => { if (Array.isArray(list) && list.every((u) => typeof u === "string")) writePins(list); } });
 })();

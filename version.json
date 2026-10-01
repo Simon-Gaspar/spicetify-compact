@@ -1,7 +1,7 @@
 {
-  "version": "1.2.0",
+  "version": "1.3.0",
   "notes": {
-    "fr": "Paramètres dans l'accueil : les trois colonnes de Mes playlists (les tiennes, des autres, de Spotify) peuvent laisser place à une seule grille.",
-    "en": "Settings on the home page: the three columns of My playlists (yours, other people's, Spotify's) can be merged into a single grid."
+    "fr": "Onglet Stats : temps d'écoute, tops, habitudes, styles, classement Spotify, import de l'historique étendu.",
+    "en": "Stats tab: listening time, tops, habits, styles, Spotify ranking, extended history import."
   }
 }

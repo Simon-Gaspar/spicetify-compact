@@ -18,6 +18,83 @@ const LANG = (() => {
 })();
 const LOCALE = LANG === "fr" ? "fr-FR" : "en-US";
 const EN = {
+  "{d} % par rapport à hier": "{d}% vs yesterday",
+  "{d} % par rapport aux 7 jours d'avant": "{d}% vs the previous 7 days",
+  "{d} % par rapport aux 30 jours d'avant": "{d}% vs the previous 30 days",
+  "4 semaines": "4 weeks",
+  "6 mois": "6 months",
+  "1 an": "1 year",
+  "Selon Spotify": "According to Spotify",
+  "Le classement que Spotify calcule pour toi, sur tous tes appareils (l'ordre seulement, sans nombre d'écoutes).": "The ranking Spotify computes for you, across all your devices (order only, no play counts).",
+  "Voir le top 50": "Show top 50",
+  "réponse vide": "empty response",
+  "Titres": "Tracks",
+  "{n} écoutes": "{n} plays",
+  "{n} écoute": "{n} play",
+  "{n} jours": "{n} days",
+  "{n} jour": "{n} day",
+  "30 jours": "30 days",
+  "7 jours": "7 days",
+  "Activité": "Activity",
+  "Artistes jamais écoutés avant cette période.": "Artists you had never played before this period.",
+  "Autre": "Other",
+  "Cette année": "This year",
+  "Chaque titre écouté est noté à partir d'aujourd'hui, sur cet ordinateur. Reviens après quelques morceaux, ou importe ton historique Spotify pour remonter plus loin.": "Every track you play is recorded from today on, on this computer. Come back after a few songs, or import your Spotify history to go further back.",
+  "D'après tes dossiers de style : rien de classé sur cette période.": "Based on your style folders: nothing classified in this period.",
+  "{pct} % de l'écoute classée, d'après les artistes de tes dossiers de style.": "{pct}% of listening classified, based on the artists in your style folders.",
+  "D'où tu écoutes": "Where you listen from",
+  "Depuis toujours": "All time",
+  "En boucle": "On repeat",
+  "Habitudes": "Habits",
+  "Heure de pointe": "Peak hour",
+  "Historique": "History",
+  "Import impossible : ": "Import failed: ",
+  "Import retiré.": "Import removed.",
+  "Importer…": "Import…",
+  "Jours consécutifs avec au moins une écoute, jusqu'à aujourd'hui.": "Consecutive days with at least one play, up to today.",
+  "Import… fichier {i} sur {n}": "Importing… file {i} of {n}",
+  "Les plus passés": "Most skipped",
+  "Les écoutes sont notées sur cet ordinateur à partir de maintenant.": "Plays are recorded on this computer from now on.",
+  "Part des titres lancés puis passés avant 30 secondes.": "Share of tracks started and skipped within 30 seconds.",
+  "Playlists, albums et radios d'où viennent tes écoutes (notées ici seulement).": "Playlists, albums and radios your plays come from (recorded here only).",
+  "Plus longue séance": "Longest session",
+  "Podcasts": "Podcasts",
+  "Pour remonter plus loin, demande ton historique à Spotify (Compte → Confidentialité → « Historique de streaming étendu ») et importe les fichiers JSON reçus.": "To go further back, request your history from Spotify (Account → Privacy → \"Extended streaming history\") and import the JSON files you receive.",
+  "Radio": "Radio",
+  "Recherche": "Search",
+  "Retirer l'import": "Remove import",
+  "Retirer les {n} écoutes importées ? Celles notées ici restent.": "Remove the {n} imported plays? Those recorded here stay.",
+  "Rien sur cette période.": "Nothing in this period.",
+  "Rien à importer : ces fichiers ne contiennent pas d'écoutes Spotify, ou elles sont déjà là.": "Nothing to import: these files contain no Spotify plays, or they're already here.",
+  "Selon l'heure": "By hour",
+  "Selon le jour": "By day",
+  "Spotify ne publie pas ce chiffre : estimation courante de ce qu'une écoute de plus de 30 s rapporte aux ayants droit.": "Spotify doesn't publish this figure: a common estimate of what a play over 30 s pays rights holders.",
+  "Stats indisponibles : ": "Stats unavailable: ",
+  "Styles": "Styles",
+  "Tes stats démarrent maintenant": "Your stats start now",
+  "Top albums": "Top albums",
+  "Top artistes": "Top artists",
+  "Top titres": "Top tracks",
+  "artistes": "artists",
+  "avant 30 s d'écoute": "within 30 s",
+  "d'affilée": "day streak",
+  "d'écoute": "listened",
+  "estimation : ~0,004 $ par écoute": "estimate: ~$0.004 per play",
+  "l'extension accueil-core.js n'est pas chargée": "the accueil-core.js extension isn't loaded",
+  "nouveaux artistes": "new artists",
+  "par jour en moyenne": "per day on average",
+  "pas encore d'historique avant": "no earlier history yet",
+  "passé {n} fois": "skipped {n} times",
+  "record : {n} j": "best: {n} d",
+  "reversés aux artistes": "paid to artists",
+  "titres différents": "unique tracks",
+  "titres passés": "skipped",
+  "{n} fois le {date}": "{n} times on {date}",
+  "{n} titres découverts": "{n} tracks discovered",
+  "{n} écoutes importées, du {from} au {to}.": "{n} plays imported, from {from} to {to}.",
+  "{n} écoutes importées.": "{n} plays imported.",
+  "Écoutes notées sur cet ordinateur depuis le {date} (y compris celles lancées ailleurs pendant que Spotify est ouvert ici).": "Plays recorded on this computer since {date} (including those started elsewhere while Spotify is open here).",
+  "écoutes": "plays",
   "Musique": "Music",
   "Podcasts & livres": "Podcasts & books",
   "Mes playlists": "My playlists",
@@ -297,10 +374,13 @@ async function buildStyleIndex() {
   const uris = Object.keys(playlists);
   styleProgress = { done: 0, total: uris.length };
   notifyStyles();
+  const artistNames = {};
   await pool(uris, 6, async (uri) => {
     const style = playlists[uri];
     try {
-      const list = await trackArtists(uri, 150);
+      const r = await Spicetify.Platform.PlaylistAPI.getContents(uri, { limit: 150 });
+      const list = [];
+      for (const t of r.items || []) for (const a of t.artists || []) if (a.uri) { list.push(a.uri); artistNames[a.uri] = a.name; }
       for (const a of list) {
         const v = (votes[a] ||= {});
         v[style] = (v[style] || 0) + 1;
@@ -332,7 +412,10 @@ async function buildStyleIndex() {
     const other = secondStyle(tally, known, own);
     if (other) also[uri] = other;
   }
-  const idx = { v: 3, at: Date.now(), styles, playlists, subs, also, artists, items: {} };
+  // Style par nom d'artiste (en minuscules) : pour l'historique importé, qui ne donne que les noms.
+  const byName = {};
+  for (const [a, st] of Object.entries(artists)) if (artistNames[a]) byName[artistNames[a].toLowerCase()] = st;
+  const idx = { v: 4, at: Date.now(), styles, playlists, subs, also, artists, byName, items: {} };
   lsSet(STYLE_KEY, idx);
   styleProgress = null;
   notifyStyles();
@@ -342,8 +425,8 @@ async function buildStyleIndex() {
 function getStyleIndex() {
   if (!styleIndexPromise) {
     const cached = lsGet(STYLE_KEY);
-    // v3 : sous-dossiers et playlists mixtes (index plus ancien : à reconstruire)
-    styleIndexPromise = cached?.v === 3 && Date.now() - cached.at < STYLE_TTL ? Promise.resolve(cached) : buildStyleIndex();
+    // v4 : styles par nom d'artiste, pour les stats (index plus ancien : à reconstruire)
+    styleIndexPromise = cached?.v === 4 && Date.now() - cached.at < STYLE_TTL ? Promise.resolve(cached) : buildStyleIndex();
     styleIndexPromise.catch(() => { styleIndexPromise = null; styleProgress = null; notifyStyles(); });
   }
   return styleIndexPromise;
@@ -1770,9 +1853,531 @@ function Audiobooks() {
     h(Status, { state: home }, () => suggested.map((sec) => h(Section, { key: sec.title, title: sec.title, items: sec.items, limit: 12 }))));
 }
 
+// ---------- stats ----------
+// Écoutes notées par l'extension (accueil-core.js, section 10) dans IndexedDB depuis l'installation,
+// plus l'historique importé depuis Spotify. Tout est calculé ici, à la volée, sur cet ordinateur.
+// Une écoute compte à partir de 30 s (seuil de Spotify) ; en dessous, le titre est « passé ».
+// Artistes : l'artiste principal de chaque titre, comparé par son nom (l'historique importé ne
+// donne que les noms).
+const STATS_PERIODS = [
+  { id: "today", label: tr("Aujourd'hui") },
+  { id: "week", label: tr("7 jours") },
+  { id: "month", label: tr("30 jours") },
+  { id: "year", label: tr("Cette année") },
+  { id: "all", label: tr("Depuis toujours") },
+];
+const DAY = 86400000;
+const PAY_PER_STREAM = 0.004; // estimation courante (en dollars) de ce que Spotify reverse par écoute
+const SESSION_GAP = 20 * 60000;
+const startOfDay = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+const dayOf = (t) => { const d = new Date(t); return d.getFullYear() * 10000 + d.getMonth() * 100 + d.getDate(); };
+const artistKey = (r) => (r.an?.[0] || "").toLowerCase();
+const albumKey = (r) => (r.aln ? `${r.aln.toLowerCase()}|${artistKey(r)}` : "");
+const nameKey = (r) => `${artistKey(r)}|${(r.n || "").toLowerCase()}`;
+
+const fmtNum = (n) => n.toLocaleString(LOCALE);
+function fmtDur(ms) {
+  const min = Math.round(ms / 60000);
+  if (ms < 60000) return `${Math.round(ms / 1000)} s`;
+  const hours = Math.floor(min / 60), m = min % 60;
+  if (!hours) return LANG === "fr" ? `${m} min` : `${m}m`;
+  if (hours >= 100) return `${fmtNum(hours)} h`;
+  return LANG === "fr" ? `${hours} h ${String(m).padStart(2, "0")}` : `${hours}h ${m}m`;
+}
+const fmtDay = (t, opts = { day: "numeric", month: "long" }) => new Date(t).toLocaleDateString(LOCALE, opts);
+
+function periodRange(id, first) {
+  const now = Date.now(), today = startOfDay(now);
+  if (id === "today") return { from: today, prev: today - DAY };
+  if (id === "week") return { from: today - 6 * DAY, prev: today - 13 * DAY };
+  if (id === "month") return { from: today - 29 * DAY, prev: today - 59 * DAY };
+  if (id === "year") return { from: new Date(new Date().getFullYear(), 0, 1).getTime() };
+  return { from: first ? startOfDay(first) : today };
+}
+
+// Lues une fois par session (des centaines de milliers avec un historique importé), puis tenues à jour.
+let statsRecords = null;
+function useStatsRecords() {
+  const [records, setRecords] = useState(statsRecords);
+  const [error, setError] = useState(null);
+  useEffect(() => {
+    const core = window.AccueilCore;
+    if (!core?.statsAll) { setError(tr("l'extension accueil-core.js n'est pas chargée")); return; }
+    let alive = true;
+    const load = () => core.statsAll().then((r) => { statsRecords = r; if (alive) setRecords(r); }, (e) => alive && setError(errMsg(e)));
+    if (!statsRecords) load();
+    // Une écoute de plus : ajoutée telle quelle ; un import ou une suppression : tout est relu.
+    const onChange = (e) => {
+      const added = e.detail || [];
+      if (added.length === 1 && added[0].src === "live") {
+        if (statsRecords) statsRecords = [...statsRecords, added[0]];
+        if (alive) setRecords(statsRecords);
+      } else load();
+    };
+    window.addEventListener("accueil:stats", onChange);
+    return () => { alive = false; window.removeEventListener("accueil:stats", onChange); };
+  }, []);
+  return { records, error };
+}
+
+function topOf(map, n = 10) {
+  return [...map.values()].sort((a, b) => b.plays - a.plays || b.ms - a.ms).slice(0, n);
+}
+function bump(map, key, r, extra) {
+  if (!key) return;
+  const e = map.get(key) || { key, plays: 0, ms: 0, rec: r, ...extra };
+  e.plays += 1;
+  e.ms += r.ms;
+  if (r.src === "live" || !e.rec.img) e.rec = r; // de préférence une écoute notée ici (image, uri d'artiste)
+  map.set(key, e);
+}
+
+function computeStats(all, periodId, idx) {
+  let first = Infinity;
+  for (const r of all) if (r.t < first) first = r.t;
+  if (first === Infinity) first = null;
+  const { from, prev } = periodRange(periodId, first);
+  const to = Date.now();
+  const hasBefore = first != null && first < from;
+
+  const firstArtist = new Map(), firstTrack = new Map(), days = new Set();
+  const cur = [], before = [];
+  for (const r of all) {
+    if (r.ty === "track" && !r.s) {
+      const a = artistKey(r);
+      if (a && !(firstArtist.get(a) <= r.t)) firstArtist.set(a, r.t);
+      if (!(firstTrack.get(r.u) <= r.t)) firstTrack.set(r.u, r.t);
+      days.add(dayOf(r.t));
+    }
+    if (r.t >= from && r.t <= to) cur.push(r);
+    else if (prev != null && r.t >= prev && r.t < from) before.push(r);
+  }
+
+  const music = cur.filter((r) => r.ty === "track");
+  const plays = music.filter((r) => !r.s);
+  const ms = music.reduce((s, r) => s + r.ms, 0);
+  const prevMs = before.filter((r) => r.ty === "track").reduce((s, r) => s + r.ms, 0);
+  const podcastMs = cur.filter((r) => r.ty === "episode").reduce((s, r) => s + r.ms, 0);
+
+  const tracks = new Map(), artists = new Map(), albums = new Map(), contexts = new Map(), loops = new Map(), skipped = new Map();
+  const hours = new Array(24).fill(0), weekdays = new Array(7).fill(0);
+  for (const r of plays) {
+    bump(tracks, r.u, r);
+    bump(artists, artistKey(r), r, { name: r.an?.[0] || "" });
+    bump(albums, albumKey(r), r);
+    if (r.c && r.c !== r.al) bump(contexts, r.c, r);
+    bump(loops, `${dayOf(r.t)}|${r.u}`, r, { day: r.t });
+    const mid = new Date(r.t - r.ms / 2);
+    hours[mid.getHours()] += r.ms;
+    weekdays[(mid.getDay() + 6) % 7] += r.ms; // lundi d'abord
+  }
+  for (const r of music) if (r.s) bump(skipped, r.u, r);
+
+  // Activité : par heure aujourd'hui, par jour sur 7 et 30 jours, par mois sur l'année, par mois ou
+  // par an depuis le début.
+  let buckets;
+  if (periodId === "today") buckets = Array.from({ length: 24 }, (_, i) => ({ from: from + i * 3600000, label: `${i} h` }));
+  else if (periodId === "week" || periodId === "month") {
+    const n = periodId === "week" ? 7 : 30;
+    buckets = Array.from({ length: n }, (_, i) => { const t = startOfDay(from + i * DAY + DAY / 2); return { from: t, label: fmtDay(t, n === 7 ? { weekday: "short", day: "numeric" } : { day: "numeric", month: "short" }) }; });
+  } else {
+    const start = new Date(from), end = new Date();
+    const months = (end.getFullYear() - start.getFullYear()) * 12 + end.getMonth() - start.getMonth() + 1;
+    if (months <= 36) buckets = Array.from({ length: months }, (_, i) => { const t = new Date(start.getFullYear(), start.getMonth() + i, 1).getTime(); return { from: t, label: fmtDay(t, { month: "short", year: months > 12 ? "2-digit" : undefined }) }; });
+    else buckets = Array.from({ length: end.getFullYear() - start.getFullYear() + 1 }, (_, i) => { const y = start.getFullYear() + i; return { from: new Date(y, 0, 1).getTime(), label: String(y) }; });
+  }
+  for (const b of buckets) b.ms = 0;
+  for (const r of music) {
+    let i = buckets.length - 1;
+    while (i > 0 && buckets[i].from > r.t) i--;
+    buckets[i].ms += r.ms;
+  }
+
+  // Séances : écoutes séparées de moins de 20 min.
+  let best = null, session = null;
+  for (const r of [...cur].sort((a, b) => a.t - b.t)) {
+    const start = r.t - r.ms;
+    if (!session || start - session.end > SESSION_GAP) session = { start, end: r.t, ms: 0 };
+    session.end = r.t;
+    session.ms += r.ms;
+    if (!best || session.ms > best.ms) best = session;
+  }
+
+  // Série : jours consécutifs avec au moins une écoute, jusqu'à aujourd'hui (ou hier, si rien encore).
+  let streak = 0;
+  for (let t = days.has(dayOf(to)) ? to : to - DAY; days.has(dayOf(t)); t -= DAY) streak++;
+  let record = 0, run = 0, last = null;
+  for (const d of [...days].sort((a, b) => a - b)) {
+    const date = new Date(Math.floor(d / 10000), Math.floor(d / 100) % 100, d % 100).getTime();
+    run = last != null && Math.round((date - last) / DAY) === 1 ? run + 1 : 1;
+    record = Math.max(record, run);
+    last = date;
+  }
+
+  // Styles : d'après le dossier de la playlist écoutée, sinon l'artiste (par son uri, ou son nom pour
+  // l'historique importé). Les artistes absents de tes dossiers ne sont pas comptés.
+  let styles = null;
+  if (idx) {
+    const byStyle = new Map();
+    let classified = 0;
+    for (const r of plays) {
+      const si = idx.artists[r.a?.[0]] ?? idx.byName?.[artistKey(r)];
+      const st = idx.playlists[r.c] || (si !== undefined ? idx.styles[si] : null);
+      if (!st) continue;
+      classified += r.ms;
+      byStyle.set(st, (byStyle.get(st) || 0) + r.ms);
+    }
+    styles = { total: classified, list: [...byStyle].map(([name, v]) => ({ name, ms: v })).sort((a, b) => b.ms - a.ms) };
+  }
+
+  const spanDays = Math.max(1, Math.ceil((to - from) / DAY));
+  const newArtists = [...artists.keys()].filter((a) => firstArtist.get(a) >= from).length;
+  const newTracks = [...tracks.keys()].filter((u) => firstTrack.get(u) >= from).length;
+  return {
+    from, first, hasBefore, ms, prevMs: prev != null && hasBefore ? prevMs : null, podcastMs,
+    plays: plays.length, artists: artists.size, unique: tracks.size,
+    skipRate: music.length ? (music.length - plays.length) / music.length : 0,
+    paid: plays.length * PAY_PER_STREAM, avgDay: ms / spanDays, spanDays,
+    newArtists, newTracks, streak, record, session: best,
+    peakHour: hours.some(Boolean) ? hours.indexOf(Math.max(...hours)) : null, hours, weekdays, buckets,
+    topTracks: topOf(tracks), topArtists: topOf(artists), topAlbums: topOf(albums), topContexts: topOf(contexts, 8),
+    loops: topOf(loops, 5).filter((l) => l.plays >= 3), skipped: topOf(skipped, 5).filter((s) => s.plays >= 2),
+    styles,
+  };
+}
+
+// Images : celles notées avec l'écoute, sinon les métadonnées de Spotify (gardées en cache local).
+const ART_KEY = "accueil:stats-art";
+const artCache = lsGet(ART_KEY) || {};
+let artSaveTimer;
+const artJobs = {};
+function resolveArt(key, fn) {
+  if (key in artCache) return Promise.resolve(artCache[key]);
+  return (artJobs[key] ||= fn().catch(() => null).then((url) => {
+    artCache[key] = url || null;
+    clearTimeout(artSaveTimer);
+    artSaveTimer = setTimeout(() => lsSet(ART_KEY, artCache), 2000);
+    return url || null;
+  }));
+}
+const describeUri = (uri) => window.AccueilCore.describe(uri).then((d) => d.img);
+async function artistUriOf(r) {
+  if (r.a?.[0]) return r.a[0];
+  if (!r.u.startsWith("spotify:track:")) return null;
+  const gid = (await spMeta("track", r.u.split(":")[2])).artist?.[0]?.gid;
+  return gid ? `spotify:artist:${Spicetify.URI.hexToId(gid)}` : null;
+}
+function useArt(kind, r) {
+  const key = kind === "artist" ? `artist:${artistKey(r)}` : kind === "context" ? r.c : r.u;
+  const known = kind === "track" || kind === "album" ? r.img : null;
+  const [url, setUrl] = useState(known || artCache[key] || null);
+  useEffect(() => {
+    if (known || artCache[key] !== undefined) return;
+    let alive = true;
+    const job = kind === "artist" ? async () => { const u = await artistUriOf(r); return u ? describeUri(u) : null; }
+      : kind === "context" ? () => describeUri(r.c)
+      : r.u.startsWith("spotify:") ? () => describeUri(r.u) : async () => null;
+    resolveArt(key, job).then((u) => alive && setUrl(u));
+    return () => { alive = false; };
+  }, [key]);
+  return url;
+}
+
+// Nom d'un contexte d'écoute (playlist, album, artiste, titres likés…), via la bibliothèque ou Spotify.
+const contextNames = {};
+const contextFallback = (uri) => (/station|radio/.test(uri) ? tr("Radio") : /:search/.test(uri) ? tr("Recherche") : tr("Autre"));
+function useContextName(uri, label) {
+  const [name, setName] = useState(uri ? contextNames[uri] || null : null);
+  useEffect(() => {
+    if (!uri || contextNames[uri]) return;
+    const fallback = label || contextFallback(uri);
+    let alive = true;
+    const done = (n) => { contextNames[uri] = n; if (alive) setName(n); };
+    if (/:collection$/.test(uri) || uri.includes(":collection:")) done(tr("Titres likés"));
+    else if (window.AccueilCore?.describe && /^spotify:(playlist|album|artist|track):/.test(uri)) window.AccueilCore.describe(uri).then((d) => done(d.name), () => done(fallback));
+    else done(fallback);
+    return () => { alive = false; };
+  }, [uri]);
+  return uri ? name || "…" : null;
+}
+
+const playable = (uri) => /^spotify:(track|album|artist|playlist|episode|show):/.test(uri || "");
+function StatRow({ i, kind, e, count }) {
+  const r = e.rec;
+  const img = useArt(kind, r);
+  const ctxName = useContextName(kind === "context" ? r.c : null, r.cn);
+  const artistUri = kind === "artist" ? r.a?.[0] : null;
+  const uri = kind === "track" ? r.u : kind === "album" ? r.al : kind === "artist" ? artistUri : r.c;
+  const title = kind === "track" ? r.n : kind === "album" ? r.aln : kind === "artist" ? e.name : ctxName;
+  const sub = kind === "track" || kind === "album" ? r.an?.join(", ") : tr(e.plays > 1 ? "{n} écoutes" : "{n} écoute", { n: fmtNum(e.plays) });
+  const right = count ? [count(e)]
+    : kind === "track" || kind === "album" ? [tr(e.plays > 1 ? "{n} écoutes" : "{n} écoute", { n: fmtNum(e.plays) }), fmtDur(e.ms)]
+    : [fmtDur(e.ms)];
+  const open = () => { if (playable(uri)) openUri(uri); };
+  const row = h("div", { className: "acc-srow" + (playable(uri) ? " is-link" : ""), onClick: open },
+    h("span", { className: "acc-srow-rank" + (i < 3 ? " is-top" : "") }, i + 1),
+    h("div", { className: "acc-srow-img" + (kind === "artist" ? " is-round" : "") },
+      img && h("img", { src: img, alt: "", loading: "lazy" }),
+      playable(uri) && kind !== "artist" && h("button", { className: "acc-srow-play", "aria-label": tr("Lire ") + title, onClick: (ev) => { ev.stopPropagation(); play(uri); } }, h(PlayIcon))),
+    h("div", { className: "acc-srow-text" },
+      h("div", { className: "acc-srow-title" }, title || "—"),
+      h("div", { className: "acc-sub" }, sub)),
+    h("div", { className: "acc-srow-right" }, right.map((x, j) => h("div", { key: j, className: j ? "acc-sub" : "" }, x))));
+  return playable(uri) ? withMenu(uri, row) : row;
+}
+
+const NoteIcon = () => h("svg", { viewBox: "0 0 24 24", width: 18, height: 18, fill: "currentColor" }, h("path", { d: "M12 3v10.55A4 4 0 1 0 14 17V7h4V3z" }));
+const PersonIcon = () => h("svg", { viewBox: "0 0 24 24", width: 18, height: 18, fill: "currentColor" }, h("circle", { cx: 12, cy: 8, r: 4 }), h("path", { d: "M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z" }));
+const DiscIcon = () => h("svg", { viewBox: "0 0 24 24", width: 18, height: 18, fill: "none", stroke: "currentColor", strokeWidth: 2 }, h("circle", { cx: 12, cy: 12, r: 9 }), h("circle", { cx: 12, cy: 12, r: 2.5 }));
+const ListIcon = () => h("svg", { viewBox: "0 0 24 24", width: 18, height: 18, fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" }, h("path", { d: "M4 6h16M4 12h16M4 18h10" }));
+
+function TopList({ title, icon, kind, items, empty, count }) {
+  return h("div", { className: "acc-scard acc-stop" },
+    h("h3", { className: "acc-stop-head" }, h(icon), title),
+    items.length ? items.map((e, i) => h(StatRow, { key: e.key, i, kind, e, count })) : h("div", { className: "acc-sub acc-stop-empty" }, empty || tr("Rien sur cette période.")));
+}
+
+function Bars({ buckets, labelEvery = 1 }) {
+  const max = Math.max(1, ...buckets.map((b) => b.ms));
+  return h("div", { className: "acc-bars" },
+    buckets.map((b, i) => h("div", { key: i, className: "acc-bar", title: `${b.label} · ${fmtDur(b.ms)}` },
+      h("div", { className: "acc-bar-fill", style: { height: `${Math.max(b.ms ? 3 : 0, (b.ms / max) * 100)}%` } }),
+      h("div", { className: "acc-bar-label" }, i % labelEvery === 0 ? b.label : ""))));
+}
+
+function StatCard({ value, label, note, color, title }) {
+  return h("div", { className: "acc-scard acc-snum", title },
+    h("div", { className: "acc-snum-value", style: color ? { color } : null }, value),
+    h("div", { className: "acc-snum-label" }, label),
+    note && h("div", { className: "acc-sub acc-snum-note" }, note));
+}
+
+const WEEKDAYS = () => Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 1 + i).toLocaleDateString(LOCALE, { weekday: "short" }));
+
+function StatsView({ period }) {
+  const { records, error } = useStatsRecords();
+  const [idx, setIdx] = useState(null);
+  useEffect(() => { getStyleIndex().then(setIdx, () => {}); }, []);
+  const s = useMemo(() => (records ? computeStats(records, period, idx) : null), [records, period, idx]);
+  if (error) return h("div", { className: "acc-empty" }, tr("Stats indisponibles : ") + error);
+  if (!s) return h("div", { className: "acc-empty" }, tr("Chargement…"));
+  if (!records.length) return h("section", { className: "acc-section" },
+    h("div", { className: "acc-scard acc-stats-intro" },
+      h("h2", null, tr("Tes stats démarrent maintenant")),
+      h("p", { className: "acc-sub" }, tr("Chaque titre écouté est noté à partir d'aujourd'hui, sur cet ordinateur. Reviens après quelques morceaux, ou importe ton historique Spotify pour remonter plus loin."))),
+    h(SpotifyTops),
+    h(StatsImport, { records }));
+
+  const delta = s.prevMs ? Math.round(((s.ms - s.prevMs) / s.prevMs) * 100) : null;
+  const deltaText = delta != null && tr({ today: "{d} % par rapport à hier", week: "{d} % par rapport aux 7 jours d'avant", month: "{d} % par rapport aux 30 jours d'avant" }[period], { d: (delta > 0 ? "+" : "") + delta });
+  const hourBuckets = s.hours.map((ms, i) => ({ ms, label: `${i} h` }));
+  const dayBuckets = s.weekdays.map((ms, i) => ({ ms, label: WEEKDAYS()[i] }));
+  const styleTotal = s.styles?.total || 0;
+
+  return h("section", { className: "acc-section acc-stats" },
+    h("div", { className: "acc-stats-top" },
+      h("div", { className: "acc-shero" },
+        h("div", { className: "acc-shero-value" }, fmtDur(s.ms)),
+        h("div", { className: "acc-shero-label" }, tr("d'écoute"),
+          deltaText && h("span", { className: "acc-shero-delta" + (delta < 0 ? " is-down" : "") }, deltaText)),
+        h("div", { className: "acc-shero-row" },
+          [[fmtNum(s.plays), tr("écoutes")], [fmtNum(s.artists), tr("artistes")], [fmtNum(s.unique), tr("titres différents")],
+            period !== "today" && [fmtDur(s.avgDay), tr("par jour en moyenne")]].filter(Boolean).map(([v, l]) =>
+            h("div", { key: l, className: "acc-shero-stat" }, h("div", { className: "acc-shero-num" }, v), h("div", { className: "acc-shero-small" }, l))))),
+      h("div", { className: "acc-snums" },
+        h(StatCard, { value: s.paid.toLocaleString(LOCALE, { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: s.paid < 1 ? 3 : 2 }), label: tr("reversés aux artistes"), color: "var(--acc-green)",
+          note: tr("estimation : ~0,004 $ par écoute"), title: tr("Spotify ne publie pas ce chiffre : estimation courante de ce qu'une écoute de plus de 30 s rapporte aux ayants droit.") }),
+        h(StatCard, { value: tr(s.streak > 1 ? "{n} jours" : "{n} jour", { n: s.streak }), label: tr("d'affilée"), color: "#ffa42b",
+          note: tr("record : {n} j", { n: s.record }), title: tr("Jours consécutifs avec au moins une écoute, jusqu'à aujourd'hui.") }),
+        h(StatCard, { value: s.hasBefore ? fmtNum(s.newArtists) : "—", label: tr("nouveaux artistes"), color: "#b49bff",
+          note: s.hasBefore ? tr("{n} titres découverts", { n: fmtNum(s.newTracks) }) : tr("pas encore d'historique avant"), title: tr("Artistes jamais écoutés avant cette période.") }),
+        h(StatCard, { value: `${Math.round(s.skipRate * 100)} %`, label: tr("titres passés"), color: "#f15e6c",
+          note: tr("avant 30 s d'écoute"), title: tr("Part des titres lancés puis passés avant 30 secondes.") }))),
+
+    s.buckets.length > 1 && h("div", { className: "acc-scard acc-sactivity" },
+      h("h3", { className: "acc-stop-head" }, tr("Activité")),
+      h(Bars, { buckets: s.buckets, labelEvery: s.buckets.length > 14 ? Math.ceil(s.buckets.length / 10) : 1 })),
+
+    h("div", { className: "acc-scols" },
+      h(TopList, { title: tr("Top titres"), icon: NoteIcon, kind: "track", items: s.topTracks }),
+      h(TopList, { title: tr("Top artistes"), icon: PersonIcon, kind: "artist", items: s.topArtists }),
+      h(TopList, { title: tr("Top albums"), icon: DiscIcon, kind: "album", items: s.topAlbums })),
+
+    h(SpotifyTops),
+
+    h("div", { className: "acc-scols" },
+      h(TopList, { title: tr("D'où tu écoutes"), icon: ListIcon, kind: "context", items: s.topContexts, empty: tr("Playlists, albums et radios d'où viennent tes écoutes (notées ici seulement).") }),
+      h("div", { className: "acc-scard" },
+        h("h3", { className: "acc-stop-head" }, tr("Styles")),
+        styleTotal ? s.styles.list.map((st) => h("div", { key: st.name, className: "acc-sstyle" },
+          h("div", { className: "acc-sstyle-head" }, h("span", null, tr(st.name)), h("span", { className: "acc-sub" }, `${Math.round((st.ms / styleTotal) * 100)} % · ${fmtDur(st.ms)}`)),
+          h("div", { className: "acc-sstyle-track" }, h("div", { className: "acc-sstyle-fill", style: { width: `${(st.ms / s.styles.list[0].ms) * 100}%` } }))))
+          : h("div", { className: "acc-sub acc-stop-empty" }, tr("D'après tes dossiers de style : rien de classé sur cette période.")),
+        styleTotal > 0 && h("div", { className: "acc-sub acc-snote" }, tr("{pct} % de l'écoute classée, d'après les artistes de tes dossiers de style.", { pct: Math.round((styleTotal / s.ms) * 100) }))),
+      h("div", { className: "acc-scard" },
+        h("h3", { className: "acc-stop-head" }, tr("Habitudes")),
+        h("div", { className: "acc-sfacts" },
+          [
+            s.peakHour != null && [tr("Heure de pointe"), `${s.peakHour} h – ${(s.peakHour + 1) % 24} h`],
+            s.session && [tr("Plus longue séance"), `${fmtDur(s.session.ms)} · ${fmtDay(s.session.start, { weekday: "short", day: "numeric", month: "short" })}`],
+            s.podcastMs > 0 && [tr("Podcasts"), fmtDur(s.podcastMs)],
+          ].filter(Boolean).map(([l, v]) => h("div", { key: l, className: "acc-sfact" }, h("span", { className: "acc-sub" }, l), h("span", null, v)))),
+        h("div", { className: "acc-shabit-label acc-sub" }, tr("Selon l'heure")),
+        h(Bars, { buckets: hourBuckets, labelEvery: 6 }),
+        period !== "today" && h("div", { className: "acc-shabit-label acc-sub" }, tr("Selon le jour")),
+        period !== "today" && h(Bars, { buckets: dayBuckets }))),
+
+    (s.loops.length > 0 || s.skipped.length > 0) && h("div", { className: "acc-scols is-two" },
+      s.loops.length > 0 && h(TopList, { title: tr("En boucle"), icon: NoteIcon, kind: "track", items: s.loops,
+        count: (l) => tr("{n} fois le {date}", { n: l.plays, date: fmtDay(l.day, { day: "numeric", month: "short" }) }) }),
+      s.skipped.length > 0 && h(TopList, { title: tr("Les plus passés"), icon: NoteIcon, kind: "track", items: s.skipped,
+        count: (e) => tr("passé {n} fois", { n: e.plays }) })),
+
+    h(StatsImport, { records, first: s.first }));
+}
+
+// Classements de Spotify (opération GraphQL userTopContent de la page profil) : top artistes et titres
+// par « affinité » sur 4 semaines, 6 mois ou environ un an, tous appareils. Pas de nombre d'écoutes :
+// Spotify ne donne que l'ordre. Disponibles dès l'installation, sans historique.
+const TOP_RANGES = [
+  { id: "SHORT_TERM", label: tr("4 semaines") },
+  { id: "MEDIUM_TERM", label: tr("6 mois") },
+  { id: "LONG_TERM", label: tr("1 an") },
+];
+const TOP_QUERY = { name: "userTopContent", operation: "query", sha256Hash: "49ee15704de4a7fdeac65a02db20604aa11e46f02e809c55d9a89f6db9754356", value: null };
+const topCache = {};
+function fetchSpotifyTops(range) {
+  return (topCache[range] ||= (async () => {
+    const G = Spicetify.GraphQL;
+    const input = { offset: 0, limit: 50, sortBy: "AFFINITY", timeRange: range };
+    const r = await G.Request(G.Definitions.userTopContent || TOP_QUERY, { includeTopArtists: true, topArtistsInput: input, includeTopTracks: true, topTracksInput: input });
+    const me = r?.data?.me?.profile || r?.data?.me;
+    if (!me?.topArtists && !me?.topTracks) throw new Error(r?.errors?.[0]?.message || tr("réponse vide"));
+    const src = (sources) => [...(sources || [])].sort((a, b) => Math.abs((a.width || 300) - 300) - Math.abs((b.width || 300) - 300))[0]?.url || null;
+    return {
+      artists: (me.topArtists?.items || []).map((i) => i.data).filter((d) => d?.uri).map((d) => ({ uri: d.uri, name: d.profile?.name, img: src(d.visuals?.avatarImage?.sources) })),
+      tracks: (me.topTracks?.items || []).map((i) => i.data).filter((d) => d?.uri).map((d) => ({ uri: d.uri, name: d.name, sub: (d.artists?.items || []).map((a) => a.profile?.name).join(", "), img: src(d.albumOfTrack?.coverArt?.sources) })),
+    };
+  })().catch((e) => { delete topCache[range]; throw e; }));
+}
+
+function SpotifyTopRow({ i, item, round }) {
+  return withMenu(item.uri, h("div", { className: "acc-srow is-link", onClick: () => openUri(item.uri) },
+    h("span", { className: "acc-srow-rank" + (i < 3 ? " is-top" : "") }, i + 1),
+    h("div", { className: "acc-srow-img" + (round ? " is-round" : "") },
+      item.img && h("img", { src: item.img, alt: "", loading: "lazy" }),
+      !round && h("button", { className: "acc-srow-play", "aria-label": tr("Lire ") + item.name, onClick: (ev) => { ev.stopPropagation(); play(item.uri); } }, h(PlayIcon))),
+    h("div", { className: "acc-srow-text" },
+      h("div", { className: "acc-srow-title" }, item.name),
+      item.sub && h("div", { className: "acc-sub" }, item.sub))));
+}
+
+function SpotifyTops() {
+  const [range, setRange] = useState("SHORT_TERM");
+  const [more, setMore] = useState(false);
+  const state = useAsync(() => fetchSpotifyTops(range), [range]);
+  const n = more ? 50 : 10;
+  const col = (title, icon, list, round) => h("div", { className: "acc-stop" },
+    h("h3", { className: "acc-stop-head" }, h(icon), title),
+    list.slice(0, n).map((item, i) => h(SpotifyTopRow, { key: item.uri, i, item, round })));
+  return h("div", { className: "acc-scard acc-sptops" },
+    h("div", { className: "acc-sptops-head" },
+      h("div", null,
+        h("h3", { className: "acc-stop-head" }, tr("Selon Spotify")),
+        h("div", { className: "acc-sub" }, tr("Le classement que Spotify calcule pour toi, sur tous tes appareils (l'ordre seulement, sans nombre d'écoutes)."))),
+      h(Sorts, { options: TOP_RANGES, value: range, onChange: (r) => { setRange(r); setMore(false); } })),
+    h(Status, { state }, () => h(React.Fragment, null,
+      h("div", { className: "acc-scols is-two" },
+        col(tr("Artistes"), PersonIcon, state.data.artists, true),
+        col(tr("Titres"), NoteIcon, state.data.tracks, false)),
+      !more && (state.data.artists.length > 10 || state.data.tracks.length > 10) && h("button", { className: "acc-link acc-sptops-more", onClick: () => setMore(true) }, tr("Voir le top 50")))));
+}
+
+// Import de l'historique Spotify (Compte → Confidentialité → télécharger tes données) :
+// historique étendu (Streaming_History_Audio_*.json : uri, durée, passé) ou données de compte
+// (StreamingHistory_music_*.json : noms seulement, l'année écoulée). Les écoutes déjà notées ici
+// (même titre à 90 s près) ne sont pas doublées ; réimporter les mêmes fichiers ne double rien.
+function liveIndex(records) {
+  const live = new Map();
+  for (const r of records) if (r.src === "live") for (const k of [r.u, nameKey(r)]) (live.get(k) || live.set(k, []).get(k)).push(r.t);
+  return live;
+}
+function parseHistory(entries, live) {
+  const dup = (keys, t) => keys.some((k) => (live.get(k) || []).some((x) => Math.abs(x - t) < 90000));
+  const out = [];
+  for (const e of entries) {
+    if (!e || typeof e !== "object") continue;
+    let rec;
+    if (e.ts) { // historique étendu
+      const ep = !e.spotify_track_uri && !!e.spotify_episode_uri;
+      const u = e.spotify_track_uri || e.spotify_episode_uri;
+      const t = Date.parse(e.ts), ms = Number(e.ms_played) || 0;
+      if (!u || !t || ms < 1500) continue;
+      rec = { t, ms, u, ty: ep ? "episode" : "track", n: (ep ? e.episode_name : e.master_metadata_track_name) || "",
+        an: [(ep ? e.episode_show_name : e.master_metadata_album_artist_name) || ""].filter(Boolean),
+        aln: (ep ? e.episode_show_name : e.master_metadata_album_album_name) || "",
+        s: ms < 30000 && e.reason_end !== "trackdone" };
+    } else if (e.endTime) { // données de compte : pas d'uri, heure UTC à la minute
+      const t = Date.parse(e.endTime.replace(" ", "T") + ":00Z"), ms = Number(e.msPlayed) || 0;
+      const ep = !!e.podcastName;
+      const n = ep ? e.episodeName : e.trackName, artist = ep ? e.podcastName : e.artistName;
+      if (!t || !n || ms < 1500) continue;
+      rec = { t, ms, u: `name:${artist}:${n}`, ty: ep ? "episode" : "track", n, an: [artist].filter(Boolean), aln: "", s: ms < 30000 };
+    } else continue;
+    rec = { k: `${rec.u}@${Math.floor(rec.t / 1000)}`, src: "import", ...rec };
+    if (!dup([rec.u, nameKey(rec)], rec.t)) out.push(rec);
+  }
+  return out;
+}
+
+function StatsImport({ records, first }) {
+  const [state, setState] = useState(null);
+  const imported = records.filter((r) => r.src === "import");
+  const onFiles = async (files) => {
+    if (!files.length) return;
+    // Fichier par fichier (un historique complet pèse des centaines de Mo) ; un seul signal à la fin.
+    try {
+      const live = liveIndex(records);
+      const keys = new Set(); // un même passage peut figurer dans deux fichiers
+      let lo = Infinity, hi = 0;
+      for (const [i, f] of files.entries()) {
+        setState({ busy: true, msg: tr("Import… fichier {i} sur {n}", { i: i + 1, n: files.length }) });
+        const data = JSON.parse(await f.text());
+        const recs = Array.isArray(data) ? parseHistory(data, live) : [];
+        for (const r of recs) { keys.add(r.k); if (r.t < lo) lo = r.t; if (r.t > hi) hi = r.t; }
+        await window.AccueilCore.statsAdd(recs, true);
+      }
+      await window.AccueilCore.statsAdd([]);
+      const count = keys.size;
+      if (!count) { setState({ msg: tr("Rien à importer : ces fichiers ne contiennent pas d'écoutes Spotify, ou elles sont déjà là.") }); return; }
+      setState({ msg: tr("{n} écoutes importées, du {from} au {to}.", { n: fmtNum(count), from: fmtDay(lo, { day: "numeric", month: "short", year: "numeric" }), to: fmtDay(hi, { day: "numeric", month: "short", year: "numeric" }) }) });
+    } catch (e) { setState({ msg: tr("Import impossible : ") + errMsg(e) }); }
+  };
+  const live = records.find((r) => r.src === "live");
+  let since = Infinity;
+  for (const r of records) if (r.src === "live" && r.t < since) since = r.t;
+  return h("div", { className: "acc-scard acc-simport" },
+    h("div", { className: "acc-simport-text" },
+      h("h3", { className: "acc-stop-head" }, tr("Historique")),
+      h("p", { className: "acc-sub" },
+        live ? tr("Écoutes notées sur cet ordinateur depuis le {date} (y compris celles lancées ailleurs pendant que Spotify est ouvert ici).", { date: fmtDay(since, { day: "numeric", month: "long", year: "numeric" }) }) : tr("Les écoutes sont notées sur cet ordinateur à partir de maintenant."),
+        " ", tr("Pour remonter plus loin, demande ton historique à Spotify (Compte → Confidentialité → « Historique de streaming étendu ») et importe les fichiers JSON reçus."),
+        imported.length > 0 && " " + tr("{n} écoutes importées.", { n: fmtNum(imported.length) })),
+      state?.msg && h("p", { className: "acc-simport-msg" }, state.msg)),
+    h("div", { className: "acc-simport-actions" },
+      h("label", { className: "acc-chip is-small" + (state?.busy ? " is-busy" : "") }, tr("Importer…"),
+        h("input", { type: "file", accept: ".json,application/json", multiple: true, hidden: true, disabled: !!state?.busy, onChange: (e) => { onFiles([...e.target.files]); e.target.value = ""; } })),
+      imported.length > 0 && h("button", { className: "acc-sort", onClick: async () => {
+        if (!window.confirm(tr("Retirer les {n} écoutes importées ? Celles notées ici restent.", { n: fmtNum(imported.length) }))) return;
+        await window.AccueilCore.statsRemove(imported.map((r) => r.k));
+        setState({ msg: tr("Import retiré.") });
+      } }, tr("Retirer l'import"))));
+}
+
 const MAIN_TABS = [
   { id: "music", label: tr("Musique"), tabs: MUSIC_TABS, facet: "music-chip" },
   { id: "podcasts", label: tr("Podcasts & livres"), tabs: PODCAST_TABS, facet: "podcasts-chip" },
+  { id: "stats", label: tr("Stats"), tabs: STATS_PERIODS },
 ];
 
 function Switch({ on, label, onChange }) {
@@ -1801,7 +2406,7 @@ const SettingsIcon = () =>
 function AccueilApp() {
   const [main, setMain] = useState("music");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [sub, setSub] = useState({ music: "playlists", podcasts: "episodes" });
+  const [sub, setSub] = useState({ music: "playlists", podcasts: "episodes", stats: "week" });
   const mainTab = MAIN_TABS.find((m) => m.id === main);
   const tabs = mainTab.tabs;
   const tab = tabs.find((t) => t.id === sub[main]);
@@ -1822,6 +2427,7 @@ function AccueilApp() {
   else if (main === "music" && tab.id === "later") body = h(Later);
   else if (main === "music" && tab.id === "albums") body = h(MyAlbums);
   else if (main === "podcasts" && tab.id === "books") body = h(Audiobooks);
+  else if (main === "stats") body = h(StatsView, { period: tab.id });
   else body = h(HomeSections, { key: main + tab.id, facet: mainTab.facet, tab, tabs });
 
   return h("div", { className: "acc-page" },
@@ -1832,7 +2438,7 @@ function AccueilApp() {
       h("nav", { className: "acc-main-tabs" },
         MAIN_TABS.map((m) =>
           h("button", { key: m.id, className: "acc-main-tab" + (main === m.id ? " is-on" : ""), onClick: () => setMain(m.id) }, m.label))),
-      h(PinnedHeroes, { main })),
+      main !== "stats" && h(PinnedHeroes, { main })),
     h("nav", { className: "acc-subnav" },
       tabs.map((t) => h("button", { key: t.id, className: "acc-chip" + (t.id === tab.id ? " is-on" : ""), onClick: () => setSub({ ...sub, [main]: t.id }) },
         t.label, t.id === "later" && later.length > 0 && h("span", { className: "acc-chip-n" }, later.length))),
@@ -1872,6 +2478,75 @@ header[data-testid="topbar"] { display: none !important; }
 .acc-round.is-ghost:hover { color: var(--acc-text); }
 .acc-subnav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 28px; }
 .acc-settings-btn { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+/* ---------- stats ---------- */
+.acc-stats { display: flex; flex-direction: column; gap: 20px; }
+.acc-scard { padding: 18px 20px; border-radius: 10px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.06); min-width: 0; }
+.acc-stats-top { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 20px; }
+@media (max-width: 1100px) { .acc-stats-top { grid-template-columns: minmax(0, 1fr); } }
+.acc-shero { padding: 26px 28px; border-radius: 12px; background: linear-gradient(135deg, #2b6b4f 0%, #1a8f4c 55%, #1ed760 130%); color: #fff; display: flex; flex-direction: column; justify-content: space-between; gap: 22px; }
+.acc-shero-value { font-size: clamp(2.6rem, 5vw, 4rem); font-weight: 800; letter-spacing: -.03em; line-height: 1; }
+.acc-shero-label { margin-top: 8px; font-size: .8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.acc-shero-delta { text-transform: none; letter-spacing: 0; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: rgba(0,0,0,.22); }
+.acc-shero-delta.is-down { color: #ffd2d6; }
+.acc-shero-row { display: flex; flex-wrap: wrap; gap: 14px 32px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,.2); }
+.acc-shero-num { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.acc-shero-small { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; opacity: .8; }
+.acc-snums { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.acc-snum { display: flex; flex-direction: column; justify-content: center; }
+.acc-snum-value { font-size: 1.9rem; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.acc-snum-label { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; margin-top: 4px; }
+.acc-snum-note { font-size: .75rem; margin-top: 2px; }
+.acc-scols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.acc-scols.is-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .acc-scols, .acc-scols.is-two { grid-template-columns: minmax(0, 1fr); } }
+.acc-stop-head { display: flex; align-items: center; gap: 10px; font-size: 1.125rem; font-weight: 700; margin: 0 0 12px; }
+.acc-stop-head svg { color: var(--acc-sub); }
+.acc-stop-empty { padding: 6px 0; }
+.acc-srow { display: flex; align-items: center; gap: 12px; padding: 6px 8px; margin: 0 -8px; border-radius: 6px; }
+.acc-srow.is-link { cursor: pointer; }
+.acc-srow:hover { background: var(--acc-chip); }
+.acc-srow-rank { width: 18px; flex: none; text-align: center; font-weight: 700; color: var(--acc-sub); font-variant-numeric: tabular-nums; }
+.acc-srow-rank.is-top { color: var(--acc-green); }
+.acc-srow-img { position: relative; width: 44px; height: 44px; flex: none; border-radius: 4px; overflow: hidden; background: #282828; }
+.acc-srow-img.is-round { border-radius: 50%; }
+.acc-srow-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.acc-srow-play { position: absolute; inset: 0; border: 0; display: grid; place-items: center; background: rgba(0,0,0,.55); color: #fff; opacity: 0; cursor: pointer; }
+.acc-srow:hover .acc-srow-play { opacity: 1; }
+.acc-srow-play svg { width: 16px; height: 16px; }
+.acc-srow-text { flex: 1; min-width: 0; }
+.acc-srow-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acc-srow-text .acc-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acc-srow-right { flex: none; text-align: right; font-size: .8125rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.acc-bars { display: flex; align-items: flex-end; gap: 3px; height: 120px; }
+.acc-bar { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; }
+.acc-bar-fill { border-radius: 3px 3px 0 0; background: var(--acc-green); opacity: .85; min-height: 0; }
+.acc-bar:hover .acc-bar-fill { opacity: 1; }
+.acc-bar-label { height: 16px; margin-top: 4px; font-size: .6875rem; color: var(--acc-sub); white-space: nowrap; overflow: visible; }
+.acc-scard .acc-bars { height: 90px; }
+.acc-sactivity .acc-bars { height: 140px; }
+.acc-sstyle { margin-bottom: 12px; }
+.acc-sstyle-head { display: flex; justify-content: space-between; gap: 10px; font-weight: 600; margin-bottom: 5px; font-size: .875rem; }
+.acc-sstyle-track { height: 6px; border-radius: 3px; background: var(--acc-chip); overflow: hidden; }
+.acc-sstyle-fill { height: 100%; border-radius: 3px; background: var(--acc-green); }
+.acc-snote { margin-top: 6px; font-size: .75rem; }
+.acc-sfacts { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.acc-sfact { display: flex; justify-content: space-between; gap: 10px; font-size: .875rem; font-weight: 600; }
+.acc-shabit-label { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; margin: 10px 0 6px; }
+.acc-simport { display: flex; align-items: center; gap: 24px; }
+.acc-simport-text { flex: 1; min-width: 0; }
+.acc-simport-text p { margin: 0; line-height: 1.5; }
+.acc-simport-msg { margin-top: 8px !important; font-weight: 600; }
+.acc-simport-actions { display: flex; align-items: center; gap: 10px; flex: none; }
+.acc-simport label.acc-chip { cursor: pointer; }
+.acc-simport label.is-busy { opacity: .5; pointer-events: none; }
+.acc-stats-intro h2 { margin: 0 0 6px; font-size: 1.25rem; }
+.acc-stats-intro p { margin: 0; max-width: 720px; line-height: 1.5; }
+.acc-stats-intro, .acc-stats-intro ~ .acc-scard { margin-bottom: 20px; }
+.acc-sptops-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 14px; }
+.acc-sptops-head .acc-stop-head { margin-bottom: 4px; }
+.acc-sptops .acc-scols { gap: 28px; }
+.acc-sptops-more { margin-top: 10px; }
+
 .acc-setting { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 10px 8px; border-radius: 6px; }
 .acc-setting:hover { background: var(--acc-chip); }
 .acc-setting-text { min-width: 0; }
