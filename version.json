@@ -1,7 +1,7 @@
 {
-  "version": "1.6.0",
+  "version": "1.7.0",
   "notes": {
-    "fr": "Accueil plus aéré : sous-onglets en texte, filtres sur une ligne (▶ et nombre sur le filtre choisi, « +N » pour le reste), tri en menu, Nouveautés réunies avec Découvrir.",
-    "en": "Cleaner home page: text sub-tabs, filters on one line (▶ and count on the selected filter, “+N” for the rest), sort menu, New releases merged into Discover."
+    "fr": "Clic droit sur un album : « Vinyle (Discogs) » (note, pressage original, le plus recherché, exemplaires en vente) et « Voir sur RateYourMusic ».",
+    "en": "Right-click an album: “Vinyl (Discogs)” (rating, original pressing, most wanted, copies for sale) and “View on RateYourMusic”."
   }
 }

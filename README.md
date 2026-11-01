@@ -61,6 +61,8 @@ Press Esc to close.
 - **Listen later**: sets a track, album, playlist or artist aside without liking it. You'll find it in the *Later* tab, where anything you've played is marked *Played*. The clock in the playback view does the same for the current track.
 - **Full discography** (on an artist, album or track): every release by the artist. Filter by albums, EPs, singles, compilations or already in your library, and sort by date.
 - **Pin to home** / **Unpin from home**.
+- **Vinyl (Discogs)** (on an album or track): Discogs community rating, original pressing, most-wanted pressing (wantlists), copies for sale with their lowest price, and links to Discogs. Uses Discogs' public API, no account needed; answers are kept for a week.
+- **View on RateYourMusic**: opens the album's RYM search in your browser. RYM has no API and forbids automated access, so its rating isn't shown in Spotify.
 
 ### Drag and drop
 Drag a track (player bar, queue…) onto Liked Songs to like it, or onto one of your own playlists to add it without duplicates. Your own playlists are the ones in the *My playlists* column and your pinned cards.

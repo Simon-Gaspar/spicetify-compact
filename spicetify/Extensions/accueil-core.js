@@ -8,6 +8,7 @@
 //    et range la saison précédente dans le dossier SAISONS. Une seule fois par saison.
 // 4. N'active le CSS compact du panneau (thème Compact) que si le patch 64 → 48 px est en place.
 // 6. « Écouter plus tard » et « Discographie complète » dans le menu clic droit.
+// 11. « Voir sur RateYourMusic » et « Vinyle (Discogs) » dans le menu clic droit des albums et titres.
 // 9. Avis de mise à jour : compare ACCUEIL_VERSION à version.json du dépôt GitHub (au démarrage, puis toutes les 6 h).
 // 8. Épingles de l'accueil : playlists, albums, dossiers, artistes ou émissions affichés en haut
 //    de la page, choisis au clic droit (« Épingler sur l'accueil »).
@@ -16,7 +17,7 @@
 // 5. Vérifie les API internes de Spotify dont dépend le thème et signale celles qui manquent
 //    (elles changent parfois avec les mises à jour de Spotify).
 // Version installée du thème : à incrémenter avec version.json à la racine du dépôt à chaque publication.
-const ACCUEIL_VERSION = "1.6.0";
+const ACCUEIL_VERSION = "1.7.0";
 
 // Langue : français si Spotify est en français, anglais sinon ; accueil:lang ("fr" | "en") force une
 // langue. Calculée à chaque appel (Spicetify.Locale n'est pas toujours prêt au démarrage).
@@ -32,6 +33,27 @@ const ACCUEIL_EN = {
   "{n} éléments ajoutés à « Plus tard »": "{n} items added to Later",
   "Déjà dans « Plus tard »": "Already in Later",
   "Discographie indisponible : {error}": "Discography unavailable: {error}",
+  "Voir sur RateYourMusic": "View on RateYourMusic",
+  "Vinyle (Discogs)": "Vinyl (Discogs)",
+  "Recherche sur Discogs…": "Searching Discogs…",
+  "Introuvable sur Discogs.": "Not found on Discogs.",
+  "Discogs indisponible : {error}": "Discogs unavailable: {error}",
+  "Discogs : trop de requêtes, réessaie dans une minute": "Discogs: too many requests, try again in a minute",
+  "Note Discogs": "Discogs rating",
+  "{n} votes": "{n} ratings",
+  "pressage principal": "main release",
+  "Pressage original": "Original pressing",
+  "Le plus recherché": "Most wanted",
+  "{want} le veulent · {have} l'ont": "{want} want it · {have} have it",
+  "{n} en vente dès {price}": "{n} for sale from {price}",
+  "aucun en vente": "none for sale",
+  "En vente": "For sale",
+  "{n} exemplaires sur Discogs, tous formats": "{n} copies on Discogs, all formats",
+  "Voir les vinyles en vente": "See vinyl for sale",
+  "Fiche Discogs": "Discogs page",
+  "Voir ce pressage": "View this pressing",
+  "Pas de vinyle référencé pour cet album.": "No vinyl listed for this album.",
+  "Correspondance trouvée : {title} ({year}). Vérifie sur Discogs si l'album ne correspond pas.": "Matched: {title} ({year}). Check on Discogs if it isn't the right album.",
   "Thème Compact : API Spotify introuvables ({list}), l'accueil ne peut pas démarrer": "Compact theme: Spotify APIs not found ({list}), the home page can't start",
   "Thème Compact : Spotify a changé des API internes ({list})": "Compact theme: Spotify changed some internal APIs ({list})",
   "Nouvelle saison : {name} créée et épinglée": "New season: {name} created and pinned",
@@ -338,6 +360,132 @@ function accueilSetting(key, fallback) {
     return Spicetify.URI.hexToId(gid);
   }
 
+  // ---------- 11. RateYourMusic et vinyle (Discogs) ----------
+  // RYM n'a pas d'API et interdit tout accès automatisé : on ouvre seulement sa recherche dans le
+  // navigateur. Discogs a une API publique (sans compte, 25 requêtes/min) : note de la communauté,
+  // pressage original, pressage le plus recherché (wantlists) et exemplaires en vente. Une fiche =
+  // 4 à 6 requêtes ; réponses gardées 7 jours (accueil:discogs).
+  async function albumInfo(uri) {
+    const [, type, id] = uri.split(":");
+    let albumId = id;
+    if (type === "track") albumId = Spicetify.URI.hexToId((await spMeta("track", id)).album.gid);
+    const j = await spMeta("album", albumId);
+    return { uri: "spotify:album:" + albumId, name: j.name, artist: j.artist?.[0]?.name || "", year: j.date?.year || null, img: image(j.cover_group) };
+  }
+  // Titre sans les mentions d'édition de Spotify (« (Remastered 2009) », « - Deluxe Edition »…).
+  const cleanTitle = (t) => t
+    .replace(/\s*[\(\[][^\)\]]*(remaster|deluxe|edition|anniversary|expanded|version|bonus|mono|stereo|mix)[^\)\]]*[\)\]]/gi, "")
+    .replace(/\s+-\s+[^-]*(remaster|deluxe|edition|anniversary|expanded|version)[^-]*$/i, "").trim();
+  const normTitle = (t) => t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+
+  function openRym(a) {
+    window.open(`https://rateyourmusic.com/search?searchterm=${encodeURIComponent(`${a.artist} ${cleanTitle(a.name)}`)}&searchtype=l`, "_blank");
+  }
+
+  const DISCOGS_KEY = "accueil:discogs";
+  const DISCOGS_TTL = 7 * 86400000;
+  const discogsGet = async (path) => {
+    const r = await fetch("https://api.discogs.com" + path, { headers: { Accept: "application/json" } });
+    if (r.status === 429) throw new Error(accueilT("Discogs : trop de requêtes, réessaie dans une minute"));
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  };
+  const CURRENCY = () => (accueilLang() === "fr" ? "EUR" : "USD");
+  const market = (releaseId) => discogsGet(`/marketplace/stats/${releaseId}?curr_abbr=${CURRENCY()}`).catch(() => null);
+
+  async function discogsFor(a) {
+    const cache = (() => { try { return JSON.parse(Spicetify.LocalStorage.get(DISCOGS_KEY) || "{}"); } catch { return {}; } })();
+    const hit = cache[a.uri];
+    if (hit && Date.now() - hit.at < DISCOGS_TTL) return hit.data;
+    const title = cleanTitle(a.name);
+    const q = (type) => discogsGet(`/database/search?type=${type}&artist=${encodeURIComponent(a.artist)}&release_title=${encodeURIComponent(title)}&per_page=10`);
+    // Meilleur résultat : titre identique (« Artiste - Titre »), puis année la plus proche de Spotify.
+    const pick = (results) => {
+      const want = normTitle(title);
+      const scored = (results || []).map((r) => {
+        const t = normTitle(String(r.title || "").split(" - ").slice(1).join(" - ") || r.title || "");
+        return { r, score: (t === want ? 0 : t.includes(want) || want.includes(t) ? 1 : 2) * 1000 + (a.year && r.year ? Math.abs(Number(r.year) - a.year) : 50) };
+      }).filter((x) => x.score < 2000).sort((x, y) => x.score - y.score);
+      return scored[0]?.r || null;
+    };
+    let data = null;
+    const master = pick((await q("master")).results);
+    if (master) {
+      const [m, versions] = await Promise.all([discogsGet(`/masters/${master.id}`), discogsGet(`/masters/${master.id}/versions?format=Vinyl&per_page=100`)]);
+      const vinyls = (versions.versions || []).map((v) => ({ id: v.id, label: v.label, country: v.country, year: Number(String(v.released || "").slice(0, 4)) || null, format: v.format,
+        want: v.stats?.community?.in_wantlist || 0, have: v.stats?.community?.in_collection || 0 }));
+      const original = vinyls.filter((v) => v.year).sort((x, y) => x.year - y.year || y.have - x.have)[0] || null;
+      const wanted = [...vinyls].sort((x, y) => y.want - x.want)[0] || null;
+      const [main, origMarket, wantedMarket] = await Promise.all([
+        m.main_release ? discogsGet(`/releases/${m.main_release}`).catch(() => null) : null,
+        original ? market(original.id) : null,
+        wanted && wanted.id !== original?.id ? market(wanted.id) : null,
+      ]);
+      data = { title: m.title, year: m.year, url: m.uri, masterId: master.id, forSale: m.num_for_sale || 0, rating: main?.community?.rating || null,
+        original: original && { ...original, market: origMarket }, wanted: wanted && { ...wanted, market: wanted.id === original?.id ? origMarket : wantedMarket } };
+    } else {
+      // Pas de master (album à un seul pressage) : la fiche du release lui-même.
+      const rel = pick((await q("release")).results);
+      if (rel) {
+        const [r, mk] = await Promise.all([discogsGet(`/releases/${rel.id}`), market(rel.id)]);
+        const isVinyl = (r.formats || []).some((f) => f.name === "Vinyl");
+        const one = isVinyl ? { id: r.id, label: r.labels?.[0]?.name, country: r.country, year: r.year || null, format: (r.formats || []).map((f) => [f.name, ...(f.descriptions || [])].join(", ")).join(" + "),
+          want: r.community?.want || 0, have: r.community?.have || 0, market: mk } : null;
+        data = { title: r.title, year: r.year, url: r.uri, masterId: null, forSale: r.num_for_sale || 0, rating: r.community?.rating || null, original: one, wanted: one };
+      }
+    }
+    cache[a.uri] = { at: Date.now(), data };
+    try { Spicetify.LocalStorage.set(DISCOGS_KEY, JSON.stringify(cache)); } catch {}
+    return data;
+  }
+
+  const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const num = (n) => Number(n || 0).toLocaleString(accueilLang() === "fr" ? "fr-FR" : "en-US");
+  const money = (p) => p ? Number(p.value).toLocaleString(accueilLang() === "fr" ? "fr-FR" : "en-US", { style: "currency", currency: p.currency, maximumFractionDigits: 0 }) : "";
+  const sheetStyle = `<style>.acc-dg{display:grid;gap:14px;font-size:.9375rem;line-height:1.45}.acc-dg-head{display:flex;gap:14px;align-items:center}.acc-dg-head img{width:64px;height:64px;border-radius:4px;object-fit:cover}
+.acc-dg-sub{color:var(--spice-subtext,#b3b3b3);font-size:.8125rem}.acc-dg-row{padding:10px 12px;border-radius:6px;background:rgba(255,255,255,.06)}.acc-dg-k{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--spice-subtext,#b3b3b3);margin-bottom:2px}
+.acc-dg-links{display:flex;gap:16px;flex-wrap:wrap}.acc-dg a{color:inherit;text-decoration:underline;cursor:pointer}.acc-dg-star{color:#1ed760;font-weight:700}</style>`;
+  const pressing = (v) => {
+    if (!v) return "";
+    const where = [v.label, v.country, v.year].filter(Boolean).map(esc).join(" · ");
+    const mk = v.market;
+    const sale = mk && mk.num_for_sale ? accueilT("{n} en vente dès {price}", { n: num(mk.num_for_sale), price: money(mk.lowest_price) }) : accueilT("aucun en vente");
+    return `<div>${where}</div><div class="acc-dg-sub">${esc(v.format || "")}</div><div class="acc-dg-sub">${esc(accueilT("{want} le veulent · {have} l'ont", { want: num(v.want), have: num(v.have) }))} · ${esc(sale)}</div>
+<div class="acc-dg-sub"><a href="https://www.discogs.com/release/${v.id}" target="_blank">${esc(accueilT("Voir ce pressage"))} ↗</a></div>`;
+  };
+  function sheet(a, body) {
+    return `${sheetStyle}<div class="acc-dg"><div class="acc-dg-head">${a.img ? `<img src="${esc(a.img)}" alt="">` : ""}<div><div><b>${esc(a.name)}</b></div><div class="acc-dg-sub">${esc(a.artist)}${a.year ? " · " + a.year : ""}</div></div></div>${body}</div>`;
+  }
+  async function showVinyl(uri) {
+    const modal = (a, body) => Spicetify.PopupModal.display({ title: accueilT("Vinyle (Discogs)"), content: sheet(a, body), isLarge: true });
+    let a;
+    try { a = await albumInfo(uri); } catch (e) { warn("vinyle")(e); return Spicetify.showNotification?.(accueilT("Discogs indisponible : {error}", { error: e?.message || e }), true); }
+    const rym = `<a data-rym>${esc(accueilT("Voir sur RateYourMusic"))} ↗</a>`;
+    modal(a, `<div class="acc-dg-sub">${esc(accueilT("Recherche sur Discogs…"))}</div>`);
+    let d;
+    try { d = await discogsFor(a); }
+    catch (e) { warn("discogs")(e); return modal(a, `<div>${esc(accueilT("Discogs indisponible : {error}", { error: e?.message || e }))}</div><div class="acc-dg-links">${rym}</div>`); }
+    let body;
+    if (!d) body = `<div>${esc(accueilT("Introuvable sur Discogs."))}</div><div class="acc-dg-links">${rym}</div>`;
+    else {
+      const rating = d.rating?.count ? `<div class="acc-dg-row"><div class="acc-dg-k">${esc(accueilT("Note Discogs"))}</div><span class="acc-dg-star">★ ${d.rating.average.toLocaleString(accueilLang() === "fr" ? "fr-FR" : "en-US", { maximumFractionDigits: 2 })} / 5</span> <span class="acc-dg-sub">· ${esc(accueilT("{n} votes", { n: num(d.rating.count) }))} · ${esc(accueilT("pressage principal"))}</span></div>` : "";
+      const vinyl = d.original
+        ? `<div class="acc-dg-row"><div class="acc-dg-k">${esc(accueilT("Pressage original"))}</div>${pressing(d.original)}</div>` +
+          (d.wanted && d.wanted.id !== d.original.id ? `<div class="acc-dg-row"><div class="acc-dg-k">${esc(accueilT("Le plus recherché"))}</div>${pressing(d.wanted)}</div>` : "")
+        : `<div class="acc-dg-sub">${esc(accueilT("Pas de vinyle référencé pour cet album."))}</div>`;
+      const sale = d.forSale ? `<div class="acc-dg-row"><div class="acc-dg-k">${esc(accueilT("En vente"))}</div>${esc(accueilT("{n} exemplaires sur Discogs, tous formats", { n: num(d.forSale) }))}${d.masterId ? ` · <a href="https://www.discogs.com/sell/list?master_id=${d.masterId}&format=Vinyl" target="_blank">${esc(accueilT("Voir les vinyles en vente"))} ↗</a>` : ""}</div>` : "";
+      body = rating + vinyl + sale +
+        `<div class="acc-dg-links"><a href="${esc(d.url)}" target="_blank">${esc(accueilT("Fiche Discogs"))} ↗</a>${rym}</div>` +
+        `<div class="acc-dg-sub">${esc(accueilT("Correspondance trouvée : {title} ({year}). Vérifie sur Discogs si l'album ne correspond pas.", { title: d.title, year: d.year || "?" }))}</div>`;
+    }
+    modal(a, body);
+    // Lien RYM (window.open, pas d'URL toute faite dans le HTML de la fenêtre).
+    setTimeout(() => document.querySelectorAll("[data-rym]").forEach((el) => { el.onclick = () => openRym(a); }), 0);
+  }
+  const ALBUMISH = /^spotify:(album|track):/;
+  const recordIcon = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.25"/><circle cx="8" cy="8" r="2.5"/><circle cx="8" cy="8" r=".5" fill="currentColor"/></svg>';
+  const starIcon = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M8 1.75l1.9 3.85 4.25.62-3.08 3 .73 4.23L8 11.45l-3.8 2 .73-4.23-3.08-3 4.25-.62z"/></svg>';
+
   const LATER_TYPES = /^spotify:(track|album|playlist|artist):/;
   const clock = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.25"/><path d="M8 4.5V8l2.5 1.5"/></svg>';
   const disc = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.25"/><circle cx="8" cy="8" r="1.75"/></svg>';
@@ -364,6 +512,11 @@ function accueilSetting(key, fallback) {
       (id) => History.push(`/accueil/discographie/${id}`),
       (e) => { warn("discographie")(e); Spicetify.showNotification?.(accueilT("Discographie indisponible : {error}", { error: e?.message || e }), true); }),
       (uris) => uris.length === 1 && /^spotify:(artist|album|track):/.test(uris[0]), disc).register();
+    new Spicetify.ContextMenu.Item(accueilT("Vinyle (Discogs)"), (uris) => showVinyl(uris[0]),
+      (uris) => uris.length === 1 && ALBUMISH.test(uris[0]), recordIcon).register();
+    new Spicetify.ContextMenu.Item(accueilT("Voir sur RateYourMusic"), (uris) => albumInfo(uris[0]).then(openRym,
+      (e) => { warn("rym")(e); Spicetify.showNotification?.(String(e?.message || e), true); }),
+      (uris) => uris.length === 1 && ALBUMISH.test(uris[0]), starIcon).register();
   };
   fetch("/spicetify-routes-accueil.js")
     .then((r) => { if (r.ok) registerMenus(); })
@@ -584,6 +737,6 @@ function accueilSetting(key, fallback) {
   }, 15000);
   begin();
 
-  Object.assign(window.AccueilCore, { version: ACCUEIL_VERSION, statsAll, statsAdd, statsRemove, readLater, addLater, removeLater, inLater, findItemMenu, describe, readPins, pinUri, unpinUri, isPinned,
+  Object.assign(window.AccueilCore, { version: ACCUEIL_VERSION, showVinyl, rym: (uri) => albumInfo(uri).then(openRym), statsAll, statsAdd, statsRemove, readLater, addLater, removeLater, inLater, findItemMenu, describe, readPins, pinUri, unpinUri, isPinned,
     setPins: (list) => { if (Array.isArray(list) && list.every((u) => typeof u === "string")) writePins(list); } });
 })();

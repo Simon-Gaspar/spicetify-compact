@@ -47,6 +47,8 @@ Le bouton plein écran de la barre du lecteur (ou ⤢ du panneau En cours de lec
 - **« Écouter plus tard »** : met de côté un titre, un album, une playlist ou un artiste sans le liker. On le retrouve dans l'onglet « Plus tard », où ce qui a été joué est marqué « Écouté ». L'horloge de la vue Lecture fait la même chose pour le titre en cours.
 - **« Discographie complète »** (sur un artiste, un album ou un titre) : toutes les sorties de l'artiste, filtrables (albums, EP, singles, compilations, déjà dans ta bibliothèque) et triables par date.
 - **« Épingler sur l'accueil »** / **« Retirer de l'accueil »**.
+- **« Vinyle (Discogs) »** (sur un album ou un titre) : note de la communauté Discogs, pressage original, pressage le plus recherché (wantlists), exemplaires en vente avec leur prix le plus bas, et liens vers Discogs. API publique de Discogs, sans compte ; réponses gardées une semaine.
+- **« Voir sur RateYourMusic »** : ouvre la recherche RYM de l'album dans ton navigateur. RYM n'a pas d'API et interdit l'accès automatisé, donc sa note n'est pas affichée dans Spotify.
 
 ### Glisser-déposer
 Fais glisser un titre (barre du lecteur, file d'attente…) sur « Titres likés » pour le liker, ou sur une de tes propres playlists (colonne « Mes playlists » ou carte épinglée) pour l'y ajouter, sans doublon.
